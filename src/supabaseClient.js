@@ -3,12 +3,8 @@ import { createClient } from '@supabase/supabase-js';
 const url = import.meta.env.VITE_SUPABASE_URL;
 const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
 
-if (!url || !anonKey) {
-  // Shows a clear error in the browser console instead of a cryptic crash
-  // if the .env values haven't been set yet.
-  console.error(
-    'Missing Supabase config. Set VITE_SUPABASE_URL and VITE_SUPABASE_ANON_KEY in your .env file (see .env.example).'
-  );
-}
+// Lets the app show a setup screen instead of crashing when the Vercel /
+// .env values have not been set yet.
+export const isConfigured = Boolean(url && anonKey);
 
-export const supabase = createClient(url, anonKey);
+export const supabase = createClient(url || 'http://localhost:54321', anonKey || 'missing-anon-key');

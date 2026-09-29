@@ -1,184 +1,151 @@
-import { useMemo, useRef, useState } from 'react';
-import { useAuth } from './hooks/useAuth';
-import { useWorkOrders } from './hooks/useWorkOrders';
-import { supabase } from './supabaseClient';
-import { typeLabel, todayStr } from './lib/constants';
-import { Icon } from './lib/icons';
-import Login from './components/Login';
-import KpiBar from './components/KpiBar';
-import Controls from './components/Controls';
-import BoardView from './components/BoardView';
-import LogView from './components/LogView';
-import DashboardView from './components/DashboardView';
-import WorkOrderModal from './components/WorkOrderModal';
-import Toast from './components/Toast';
-
-function csvEscape(val) {
-  if (val == null) return '';
-  const s = String(val);
-  if (/[",\n]/.test(s)) return '"' + s.replace(/"/g, '""') + '"';
-  return s;
-}
+import { useEffect, useRef, useState } from 'react';
+import { isConfigured, supabase } from './supabaseClient';
+import { DataProvider, useData } from './data/DataProvider';
+import { db } from './data/api';
+import { ToastProvider, useToast } from './components/Toast';
+import { GlobalActionsProvider } from './components/GlobalActions';
+import Layout from './components/Layout';
+import { EmptyState, Loading } from './components/ui';
+import { useRoute } from './lib/router';
+import { plural } from './lib/format';
+import Login, { SetNewPassword } from './pages/Login';
+import Dashboard from './pages/Dashboard';
+import RequesterHome from './pages/RequesterHome';
+import WorkOrders from './pages/WorkOrders';
+import WorkOrderDetail from './pages/WorkOrderDetail';
+import Requests from './pages/Requests';
+import MheHub from './pages/MheHub';
+import PreUseCheck from './pages/PreUseCheck';
+import Assets from './pages/Assets';
+import AssetDetail from './pages/AssetDetail';
+import PmSchedules from './pages/PmSchedules';
+import Parts from './pages/Parts';
+import Vendors from './pages/Vendors';
+import Compliance from './pages/Compliance';
+import Settings from './pages/Settings';
 
 export default function App() {
-  const { session, loading: authLoading } = useAuth();
-  if (authLoading) return <div className="loading-state">Loading…</div>;
-  if (!session) return <Login />;
-  return <Dashboard session={session} />;
+  const [session, setSession] = useState(null);
+  const [loading, setLoading] = useState(isConfigured);
+  const [recovery, setRecovery] = useState(false);
+
+  useEffect(() => {
+    if (!isConfigured) return;
+    supabase.auth.getSession().then(({ data }) => { setSession(data.session); setLoading(false); });
+    const { data } = supabase.auth.onAuthStateChange((event, s) => {
+      setSession(s);
+      if (event === 'PASSWORD_RECOVERY') setRecovery(true);
+    });
+    return () => data.subscription.unsubscribe();
+  }, []);
+
+  if (!isConfigured) return <SetupNeeded />;
+  if (loading) return <Loading />;
+  return (
+    <ToastProvider>
+      {recovery ? <SetNewPassword onDone={() => setRecovery(false)} />
+        : !session ? <Login />
+        : <SignedIn userId={session.user.id} />}
+    </ToastProvider>
+  );
 }
 
-function Dashboard({ session }) {
-  const { orders, loading, error, createOrder, updateOrder, deleteOrder } = useWorkOrders();
-  const [view, setView] = useState('board');
-  const [filters, setFilters] = useState({ search: '', facility: 'all', type: 'all', priority: 'all' });
-  const [modalOrder, setModalOrder] = useState(undefined); // undefined = closed, null = new, object = editing
-  const [deleteConfirmId, setDeleteConfirmId] = useState(null);
-  const [toast, setToast] = useState({ message: '', kind: 'ok' });
-  const toastTimer = useRef(null);
-
-  function showToast(message, kind = 'ok') {
-    setToast({ message, kind });
-    clearTimeout(toastTimer.current);
-    toastTimer.current = setTimeout(() => setToast({ message: '', kind: 'ok' }), 2600);
-  }
-
-  const filtered = useMemo(() => {
-    return orders.filter(o => {
-      if (filters.facility !== 'all' && o.facility !== filters.facility) return false;
-      if (filters.type !== 'all' && o.type !== filters.type) return false;
-      if (filters.priority !== 'all' && o.priority !== filters.priority) return false;
-      if (filters.search) {
-        const s = filters.search.toLowerCase();
-        const hay = `${o.code} ${o.title} ${o.description || ''} ${o.assigned_to || ''} ${o.location || ''} ${o.equipment || ''}`.toLowerCase();
-        if (!hay.includes(s)) return false;
-      }
-      return true;
-    });
-  }, [orders, filters]);
-
-  function makeActions(o) {
-    return {
-      onStart: () => handleStatus(o, 'In Progress'),
-      onHold: () => handleStatus(o, 'On Hold'),
-      onResume: () => handleStatus(o, 'In Progress'),
-      onComplete: () => handleStatus(o, 'Completed'),
-      onReopen: () => handleStatus(o, 'Open'),
-      onEdit: () => setModalOrder(o),
-      onAskDelete: () => setDeleteConfirmId(o.id),
-      onConfirmDelete: async () => {
-        try {
-          await deleteOrder(o.id);
-          showToast('Work order deleted.');
-        } catch (e) {
-          showToast(e.message || 'Could not delete.', 'error');
-        }
-        setDeleteConfirmId(null);
-      },
-      onCancelDelete: () => setDeleteConfirmId(null)
-    };
-  }
-
-  async function handleStatus(o, status) {
-    try {
-      const payload = { status };
-      payload.date_completed = status === 'Completed' ? (o.date_completed || todayStr()) : null;
-      await updateOrder(o.id, payload);
-    } catch (e) {
-      showToast(e.message || 'Could not update status.', 'error');
-    }
-  }
-
-  async function handleSave(form) {
-    const { id, code, created_by, created_at, updated_at, ...payload } = form;
-    if (id) {
-      if (payload.status === 'Completed' && !form.date_completed) payload.date_completed = todayStr();
-      if (payload.status !== 'Completed') payload.date_completed = null;
-      await updateOrder(id, payload);
-      showToast('Work order updated.');
-    } else {
-      payload.created_by = session.user.id;
-      if (payload.status === 'Completed') payload.date_completed = todayStr();
-      await createOrder(payload);
-      showToast('Work order created.');
-    }
-    setModalOrder(undefined);
-  }
-
-  function exportCSV() {
-    if (!filtered.length) { showToast('No work orders to export.', 'error'); return; }
-    const headers = ['ID', 'Title', 'Type', 'Facility', 'Location', 'Equipment', 'Priority', 'Status', 'Assigned To', 'Reported By', 'Date Reported', 'Due Date', 'Date Completed', 'Reference', 'Notes'];
-    const rows = filtered.map(o => [o.code, o.title, typeLabel(o.type), o.facility, o.location, o.equipment, o.priority, o.status, o.assigned_to, o.reported_by, o.date_reported, o.due_date, o.date_completed, o.reference, o.notes]);
-    const csv = [headers, ...rows].map(r => r.map(csvEscape).join(',')).join('\n');
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `work-orders-${todayStr()}.csv`;
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    URL.revokeObjectURL(url);
-    showToast('CSV exported.');
-  }
-
+function SetupNeeded() {
   return (
-    <div className="app-shell">
-      <header className="app-header">
-        <div className="app-brand">
-          <span className="app-mark"><Icon.Tag /></span>
-          <div>
-            <h1>Work Order Monitor</h1>
-            <p className="app-tagline">Preventive · Corrective · Safety corrective actions</p>
-          </div>
-        </div>
-        <div className="app-header-actions">
-          <span className="session-pill">{session.user.email}</span>
-          <button className="btn btn-ghost" onClick={exportCSV}><Icon.Download /> Export CSV</button>
-          <button className="btn btn-primary" onClick={() => setModalOrder(null)}><Icon.Plus /> New Work Order</button>
-          <button className="ibtn" title="Sign out" onClick={() => supabase.auth.signOut()}><Icon.LogOut /></button>
-        </div>
-      </header>
-
-      <KpiBar orders={filtered} />
-      <Controls view={view} setView={setView} filters={filters} setFilters={setFilters} />
-
-      <main>
-        {loading ? (
-          <div className="loading-state">Loading work orders…</div>
-        ) : error ? (
-          <div className="empty-state">
-            <p className="empty-title">Couldn't load work orders</p>
-            <p className="empty-sub">{error}</p>
-          </div>
-        ) : filtered.length === 0 ? (
-          <div className="empty-state">
-            <p className="empty-title">{orders.length === 0 ? 'No work orders yet' : 'No matches'}</p>
-            <p className="empty-sub">
-              {orders.length === 0
-                ? 'Log your first preventive, corrective, or safety work order to start tracking it here.'
-                : 'No work orders match the current filters.'}
-            </p>
-            {orders.length === 0 && (
-              <button className="btn btn-primary" onClick={() => setModalOrder(null)}><Icon.Plus /> New Work Order</button>
-            )}
-          </div>
-        ) : view === 'board' ? (
-          <BoardView orders={filtered} deleteConfirmId={deleteConfirmId} makeActions={makeActions} />
-        ) : view === 'log' ? (
-          <LogView orders={filtered} deleteConfirmId={deleteConfirmId} makeActions={makeActions} />
-        ) : (
-          <DashboardView orders={filtered} />
-        )}
-      </main>
-
-      <footer className="app-footer">
-        <span>Shared with your team — every change is saved and synced live.</span>
-      </footer>
-
-      {modalOrder !== undefined && (
-        <WorkOrderModal order={modalOrder} onSave={handleSave} onClose={() => setModalOrder(undefined)} />
-      )}
-      <Toast message={toast.message} kind={toast.kind} />
+    <div className="content">
+      <EmptyState title="Almost there: connect the database">
+        This copy of the CMMS has no Supabase settings yet. Add <code>VITE_SUPABASE_URL</code> and{' '}
+        <code>VITE_SUPABASE_ANON_KEY</code> (Vercel → Project → Settings → Environment Variables, or a local
+        <code> .env</code> file), then redeploy. The README walks through it.
+      </EmptyState>
     </div>
   );
+}
+
+function SignedIn({ userId }) {
+  const [profile, setProfile] = useState(null);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      // The profile row is created by a database trigger at sign-up; give it a moment.
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
+        if (!alive) return;
+        if (error) { setError(error.message); return; }
+        if (data) { setProfile(data); return; }
+        await new Promise(r => setTimeout(r, 800));
+      }
+      if (alive) setError('Your account has no profile. Ask the admin to check that supabase/schema.sql has been run.');
+    })();
+    return () => { alive = false; };
+  }, [userId]);
+
+  if (error) return <AccountProblem message={error} />;
+  if (!profile) return <Loading label="Signing in…" />;
+  if (!profile.active) return <AccountProblem message="Your account has been deactivated. Ask a CMMS admin to re-activate it." />;
+  return (
+    <DataProvider profile={profile}>
+      <GlobalActionsProvider>
+        <Shell />
+      </GlobalActionsProvider>
+    </DataProvider>
+  );
+}
+
+function AccountProblem({ message }) {
+  return (
+    <div className="content">
+      <EmptyState title="Can't open the CMMS" action={<button className="btn" onClick={() => supabase.auth.signOut()}>Sign out</button>}>
+        {message}
+      </EmptyState>
+    </div>
+  );
+}
+
+function Shell() {
+  const data = useData();
+  const route = useRoute();
+  const toast = useToast();
+  const generated = useRef(false);
+
+  // Create any preventive maintenance work orders that have come due.
+  useEffect(() => {
+    if (data.loading || !data.isStaff || generated.current) return;
+    generated.current = true;
+    db.rpc('generate_pm_work_orders')
+      .then(n => {
+        if (n > 0) {
+          toast(`${plural(n, 'preventive maintenance work order')} created for work coming due.`);
+          data.refreshTables('work_orders', 'pm_schedules');
+        }
+      })
+      .catch(e => console.warn('PM generation skipped:', e.message));
+  }, [data.loading, data.isStaff]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (data.loading) return <Loading label="Loading your facility…" />;
+  if (data.error) return <AccountProblem message={`Could not load data: ${data.error}`} />;
+
+  const [section, id, sub] = route.segments;
+  const staffOnly = el => (data.isStaff ? el : <NotAllowed />);
+  let page;
+  switch (section) {
+    case undefined: page = data.isStaff ? <Dashboard /> : <RequesterHome />; break;
+    case 'work-orders': page = id ? <WorkOrderDetail id={id} /> : staffOnly(<WorkOrders />); break;
+    case 'requests': page = <Requests />; break;
+    case 'mhe': page = id && sub === 'check' ? <PreUseCheck assetId={id} /> : <MheHub />; break;
+    case 'assets': page = staffOnly(id ? <AssetDetail id={id} /> : <Assets />); break;
+    case 'pm': page = staffOnly(<PmSchedules />); break;
+    case 'parts': page = staffOnly(<Parts />); break;
+    case 'vendors': page = staffOnly(<Vendors />); break;
+    case 'compliance': page = staffOnly(<Compliance />); break;
+    case 'settings': page = <Settings />; break;
+    default: page = <EmptyState title="Page not found">That address doesn't match anything in the CMMS.</EmptyState>;
+  }
+  return <Layout section={section}>{page}</Layout>;
+}
+
+function NotAllowed() {
+  return <EmptyState title="Technicians and admins only">Your account can submit requests and pre-use checks. Ask an admin if you need more access.</EmptyState>;
 }
