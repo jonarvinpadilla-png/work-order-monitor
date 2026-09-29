@@ -1,56 +1,100 @@
-import { supabase } from '../supabaseClient';
+// Talks to the CMMS server that ships with the app (server/). The screens
+// use the same small helpers as before: db.select / insert / update /
+// remove / rpc. The server checks every permission and business rule and
+// answers with messages that can be shown to the user as they are.
 
-// Turns database errors into messages a technician can act on.
-export function friendlyError(error) {
-  const msg = error?.message || String(error);
-  if (/row-level security|permission denied/i.test(msg)) return "You don't have permission to do that.";
-  if (/duplicate key.*assets_code_key/i.test(msg)) return 'That asset tag is already in use.';
-  if (/duplicate key.*parts_part_no_key/i.test(msg)) return 'That part number is already in use.';
-  if (/duplicate key.*vendors_name_key/i.test(msg)) return 'A vendor with that name already exists.';
-  if (/duplicate key.*sites_code_key/i.test(msg)) return 'That site code is already in use.';
-  if (/duplicate key.*asset_categories_name_key/i.test(msg)) return 'That category already exists.';
-  if (/duplicate key.*checklist_templates_name_key/i.test(msg)) return 'A checklist with that name already exists.';
-  if (/duplicate key/i.test(msg)) return 'That value is already in use.';
-  if (/violates foreign key constraint/i.test(msg)) return 'This record is still used elsewhere, so it cannot be deleted.';
-  if (/pm_calendar_fields/.test(msg)) return 'Calendar schedules need an interval and a next due date.';
-  if (/pm_meter_fields/.test(msg)) return 'Hour-meter schedules need an asset and an hour interval.';
-  if (/violates check constraint/i.test(msg)) return 'One of the values is not allowed. Check the form and try again.';
-  if (/Failed to fetch|NetworkError|Load failed/i.test(msg)) return 'Could not reach the server. Check your connection and try again.';
-  return msg;
+export class ApiError extends Error {
+  constructor(message, status) {
+    super(message);
+    this.status = status;
+  }
 }
 
-async function run(query) {
-  const { data, error } = await query;
-  if (error) throw new Error(friendlyError(error));
+const OFFLINE = 'Could not reach the CMMS server. Check that the server PC is on and that you are connected to the site network.';
+
+// Called when the server says the session has ended (signed out elsewhere,
+// password reset or account deactivated).
+const signedOutListeners = new Set();
+export function onSignedOut(fn) {
+  signedOutListeners.add(fn);
+  return () => signedOutListeners.delete(fn);
+}
+
+export async function request(method, path, body) {
+  let res;
+  try {
+    res = await fetch(`/api${path}`, {
+      method,
+      credentials: 'same-origin',
+      headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body)
+    });
+  } catch {
+    throw new ApiError(OFFLINE, 0);
+  }
+  let data = null;
+  if ((res.headers.get('content-type') || '').includes('application/json')) data = await res.json().catch(() => null);
+  if (!res.ok) {
+    if (res.status === 401 && !path.startsWith('/auth/')) signedOutListeners.forEach(fn => fn());
+    if (res.status === 502 || res.status === 503 || res.status === 504) throw new ApiError(OFFLINE, res.status);
+    throw new ApiError(data?.error || `The server answered ${res.status}.`, res.status);
+  }
   return data;
 }
 
-function one(rows, what) {
-  if (!rows || rows.length === 0) throw new Error(`You don't have permission to ${what} this record, or it no longer exists.`);
-  return rows[0];
+// A chainable query like the one the screens were written against:
+// db.select('wo_tasks', q => q.eq('work_order_id', id).order('seq')).
+class Query {
+  constructor(table) {
+    this.table = table;
+    this.spec = { eq: {}, gte: {}, order: [] };
+  }
+  eq(col, value) { this.spec.eq[col] = value; return this; }
+  gte(col, value) { this.spec.gte[col] = value; return this; }
+  order(col, { ascending = true, nullsFirst } = {}) {
+    this.spec.order.push([col, ascending ? 'asc' : 'desc', nullsFirst === undefined ? undefined : nullsFirst ? 'first' : 'last']);
+    return this;
+  }
+  limit(n) { this.spec.limit = n; return this; }
+  then(resolve, reject) {
+    return request('GET', `/rows/${this.table}?q=${encodeURIComponent(JSON.stringify(this.spec))}`).then(resolve, reject);
+  }
 }
 
 export const db = {
-  select: (table, build = q => q) => run(build(supabase.from(table).select('*'))),
-  insert: async (table, row) => one(await run(supabase.from(table).insert(row).select()), 'create'),
-  insertMany: (table, rows) => run(supabase.from(table).insert(rows)),
-  update: async (table, id, patch) => one(await run(supabase.from(table).update(patch).eq('id', id).select()), 'change'),
-  remove: async (table, id) => one(await run(supabase.from(table).delete().eq('id', id).select()), 'delete'),
-  rpc: (fn, args) => run(supabase.rpc(fn, args))
+  select: (table, build = q => q) => Promise.resolve(build(new Query(table))),
+  insert: (table, row) => request('POST', `/rows/${table}`, row),
+  insertMany: (table, rows) => request('POST', `/rows/${table}`, rows),
+  update: (table, id, patch) => request('PATCH', `/rows/${table}/${encodeURIComponent(id)}`, patch),
+  remove: (table, id) => request('DELETE', `/rows/${table}/${encodeURIComponent(id)}`),
+  rpc: (fn, args = {}) => request('POST', `/rpc/${fn}`, args)
 };
 
-// Supabase returns at most 1000 rows per request; page through the rest.
-export async function fetchAll(def) {
-  const out = [];
-  const size = 1000;
-  for (let from = 0; ; from += size) {
-    let q = supabase.from(def.table).select('*');
-    if (def.order) q = q.order(def.order, { ascending: !def.desc, nullsFirst: false });
-    q = q.order(def.key || 'id', { ascending: true });
-    if (def.sinceDays) q = q.gte(def.sinceCol || 'created_at', new Date(Date.now() - def.sinceDays * 86400000).toISOString());
-    const data = await run(q.range(from, from + size - 1));
-    out.push(...data);
-    if (data.length < size) break;
-  }
-  return out;
+// A whole table (or the recent part of it) for the in-memory datasets.
+export function fetchAll(def) {
+  const q = new Query(def.table);
+  if (def.order) q.order(def.order, { ascending: !def.desc, nullsFirst: false });
+  q.order(def.key || 'id');
+  if (def.sinceDays) q.gte(def.sinceCol || 'created_at', new Date(Date.now() - def.sinceDays * 86400000).toISOString());
+  return Promise.resolve(q);
 }
+
+// Account and server administration.
+export const auth = {
+  setup: () => request('GET', '/setup'),
+  session: () => request('GET', '/auth/session'),
+  signIn: (email, password) => request('POST', '/auth/signin', { email, password }),
+  signUp: fields => request('POST', '/auth/signup', fields),
+  signOut: () => request('POST', '/auth/signout', {}),
+  changePassword: (current_password, new_password) => request('POST', '/auth/password', { current_password, new_password })
+};
+
+export const admin = {
+  info: () => request('GET', '/admin/info'),
+  createUser: fields => request('POST', '/admin/users', fields),
+  resetPassword: (userId, password) => request('POST', `/admin/users/${userId}/password`, { password }),
+  backupNow: () => request('POST', '/admin/backup', {}),
+  loadDemo: () => request('POST', '/admin/demo', {}),
+  clearData: confirm => request('POST', '/admin/clear', { confirm }),
+  backupUrl: '/api/admin/backup'
+};

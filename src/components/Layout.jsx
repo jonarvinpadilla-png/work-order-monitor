@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '../supabaseClient';
 import { useData } from '../data/DataProvider';
+import { useSession } from '../data/session';
 import { Icon } from '../lib/icons';
 import { href } from '../lib/router';
 import { roleLabel } from '../lib/constants';
@@ -16,7 +16,8 @@ function isDark() {
 }
 
 export default function Layout({ section, children }) {
-  const { me, isStaff, isAdmin, workOrders, assets, compliance, sites, siteId, setSiteId, inSite } = useData();
+  const { me, isStaff, isAdmin, workOrders, assets, compliance, sites, siteId, setSiteId, inSite, connected } = useData();
+  const { signOut } = useSession();
   const { newWorkOrder, newRequest } = useGlobalActions();
   const [open, setOpen] = useState(false);
   const [dark, setDark] = useState(isDark);
@@ -112,7 +113,7 @@ export default function Layout({ section, children }) {
           </div>
           <div className="sidebar-actions">
             <button onClick={toggleTheme} aria-label={dark ? 'Use light theme' : 'Use dark theme'}>{dark ? <Icon.Sun /> : <Icon.Moon />}{dark ? 'Light' : 'Dark'}</button>
-            <button onClick={() => supabase.auth.signOut()}><Icon.LogOut />Sign out</button>
+            <button onClick={signOut}><Icon.LogOut />Sign out</button>
           </div>
         </div>
       </aside>
@@ -124,6 +125,11 @@ export default function Layout({ section, children }) {
           <span style={{ flex: 1 }} />
           <button onClick={() => (isStaff ? newWorkOrder() : newRequest())} aria-label={isStaff ? 'New work order' : 'Report a problem'}><Icon.Plus /></button>
         </header>
+        {!connected && (
+          <div className="offline-bar" role="status">
+            <Icon.Alert />Lost contact with the CMMS server. Reconnecting… Changes you make now may not save.
+          </div>
+        )}
         <main className="content">{children}</main>
       </div>
     </div>

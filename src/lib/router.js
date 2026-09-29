@@ -1,8 +1,8 @@
 import { useEffect, useState } from 'react';
 
 // Hash-based routing (#/work-orders/123) so the app works on any static host
-// without rewrite rules. Supabase auth links also use the hash
-// (#access_token=…); anything that does not start with "#/" is treated as home.
+// without rewrite rules on the server. Anything that does not start
+// with "#/" is treated as home.
 function read() {
   const raw = window.location.hash.startsWith('#/') ? window.location.hash.slice(1) : '/';
   const [path, qs = ''] = raw.split('?');

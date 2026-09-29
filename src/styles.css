@@ -608,3 +608,19 @@ h1, h2, h3 { margin: 0; }
 .head-art { width: 220px; height: auto; display: block; }
 .spec-art { display: block; width: 100%; max-width: 340px; height: auto; margin: 0 auto 12px; }
 @media (max-width: 640px) { .head-art { width: 170px; } }
+
+/* ------------------------------------------------ standalone server */
+.offline-bar {
+  display: flex; align-items: center; gap: 8px; padding: 9px 32px;
+  background: var(--warn-soft); color: var(--warn); font-size: 14px; font-weight: 600;
+  border-bottom: 1px solid var(--border);
+}
+.offline-bar svg { width: 18px; height: 18px; flex: none; }
+.url-list { list-style: none; margin: 0 0 12px; padding: 0; display: grid; gap: 6px; }
+.url-list code { display: inline-block; font-size: 16px; padding: 6px 10px; border-radius: 6px; background: var(--surface-2); user-select: all; }
+.welcome { margin-bottom: 16px; border-left: 4px solid var(--safety); }
+.welcome .card-title { font-size: 20px; margin-bottom: 6px; }
+.welcome-steps { margin: 0 0 16px; padding-left: 20px; display: grid; gap: 6px; }
+@media (max-width: 760px) {
+  .offline-bar { padding: 9px 16px; }
+}

@@ -1,5 +1,7 @@
 import { useMemo } from 'react';
 import { useData } from '../data/DataProvider';
+import { admin } from '../data/api';
+import { useAction } from '../components/Toast';
 import { AssetStatusBadge, AssetTag, Badge, Card, DueBadge, PriorityBadge, Tile, WoCode } from '../components/ui';
 import DcCutaway, { DC_ZONES } from '../illustrations/DcCutaway';
 import { BarList, ColumnChart, MeterBar } from '../components/Charts';
@@ -79,6 +81,8 @@ export default function Dashboard() {
           {DC_ZONES.map(z => <li key={z.key}>{z.label}: {m.zones[z.key] || 0} open work orders</li>)}
         </ul>
       </section>
+
+      {isAdmin && d.sites.length === 0 && <Welcome />}
 
       <div className="tiles">
         <Tile label="Open work orders" icon={Icon.Wrench} value={m.active.length}
@@ -214,3 +218,25 @@ export default function Dashboard() {
   );
 }
 
+// First run: nothing in the register yet.
+function Welcome() {
+  const { reload } = useData();
+  const [run, busy] = useAction();
+  return (
+    <div className="card card-pad welcome">
+      <div className="card-title">Welcome to HLPI Facilities CMMS</div>
+      <p className="dim">The register is empty. Start with your own site, or load the sample distribution centre to look around first. You can remove the sample data later under Settings → General.</p>
+      <ol className="welcome-steps">
+        <li><b>Add your site and its locations</b>: buildings, rooms, cold stores and docks.</li>
+        <li><b>Add your people</b> under Settings → Users &amp; roles, or let them create their own account.</li>
+        <li><b>Add assets and MHE units</b>, then set up preventive maintenance schedules.</li>
+      </ol>
+      <div className="page-actions">
+        <a className="btn btn-primary" href={href('/settings?tab=places')}><Icon.Plus />Add your site</a>
+        <button className="btn" disabled={busy} onClick={() => run(async () => { await admin.loadDemo(); await reload(); }, 'Sample data loaded.')}>
+          {busy ? 'Loading…' : 'Load sample data'}
+        </button>
+      </div>
+    </div>
+  );
+}

@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
-import { isConfigured, supabase } from './supabaseClient';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DataProvider, useData } from './data/DataProvider';
-import { db } from './data/api';
+import { auth, db, onSignedOut } from './data/api';
+import { SessionContext, useSession } from './data/session';
 import { ToastProvider, useToast } from './components/Toast';
 import { GlobalActionsProvider } from './components/GlobalActions';
 import Layout from './components/Layout';
@@ -26,66 +26,48 @@ import Compliance from './pages/Compliance';
 import Settings from './pages/Settings';
 
 export default function App() {
-  const [session, setSession] = useState(null);
-  const [loading, setLoading] = useState(isConfigured);
-  const [recovery, setRecovery] = useState(false);
+  const [state, setState] = useState({ status: 'loading' }); // loading | offline | signed-out | signed-in
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
-    if (!isConfigured) return;
-    supabase.auth.getSession().then(({ data }) => { setSession(data.session); setLoading(false); });
-    const { data } = supabase.auth.onAuthStateChange((event, s) => {
-      setSession(s);
-      if (event === 'PASSWORD_RECOVERY') setRecovery(true);
-    });
-    return () => data.subscription.unsubscribe();
-  }, []);
+    let alive = true;
+    auth.session()
+      .then(session => alive && setState({ status: 'signed-in', session }))
+      .catch(e => alive && setState(e.status === 401 ? { status: 'signed-out' } : { status: 'offline', message: e.message }));
+    const off = onSignedOut(() => setState({ status: 'signed-out', notice: 'Your session has ended. Sign in again.' }));
+    return () => { alive = false; off(); };
+  }, [attempt]);
 
-  if (!isConfigured) return <SetupNeeded />;
-  if (loading) return <Splash />;
+  const signOut = useCallback(async () => {
+    try { await auth.signOut(); } catch { /* signed out locally either way */ }
+    setState({ status: 'signed-out' });
+  }, []);
+  const signedIn = useCallback(session => setState({ status: 'signed-in', session }), []);
+  const ctx = useMemo(() => ({ session: state.session || null, signOut }), [state.session, signOut]);
+
+  if (state.status === 'loading') return <Splash />;
+  if (state.status === 'offline') {
+    return (
+      <div className="content">
+        <EmptyState title="Can't reach the CMMS server" action={<button className="btn btn-primary" onClick={() => { setState({ status: 'loading' }); setAttempt(a => a + 1); }}>Try again</button>}>
+          {state.message}
+        </EmptyState>
+      </div>
+    );
+  }
   return (
     <ToastProvider>
-      {recovery ? <SetNewPassword onDone={() => setRecovery(false)} />
-        : !session ? <Login />
-        : <SignedIn userId={session.user.id} />}
+      <SessionContext.Provider value={ctx}>
+        {state.status === 'signed-out' ? <Login onSignedIn={signedIn} notice={state.notice} />
+          : state.session.mustChangePassword ? <SetNewPassword onDone={signedIn} onSignOut={signOut} />
+          : <SignedIn key={state.session.user.id} profile={state.session.profile} />}
+      </SessionContext.Provider>
     </ToastProvider>
   );
 }
 
-function SetupNeeded() {
-  return (
-    <div className="content">
-      <EmptyState title="Almost there: connect the database">
-        This copy of the CMMS has no Supabase settings yet. Add <code>VITE_SUPABASE_URL</code> and{' '}
-        <code>VITE_SUPABASE_ANON_KEY</code> (Vercel → Project → Settings → Environment Variables, or a local
-        <code> .env</code> file), then redeploy. The README walks through it.
-      </EmptyState>
-    </div>
-  );
-}
-
-function SignedIn({ userId }) {
-  const [profile, setProfile] = useState(null);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    let alive = true;
-    (async () => {
-      // The profile row is created by a database trigger at sign-up; give it a moment.
-      for (let attempt = 0; attempt < 3; attempt++) {
-        const { data, error } = await supabase.from('profiles').select('*').eq('id', userId).maybeSingle();
-        if (!alive) return;
-        if (error) { setError(error.message); return; }
-        if (data) { setProfile(data); return; }
-        await new Promise(r => setTimeout(r, 800));
-      }
-      if (alive) setError('Your account has no profile. Ask the admin to check that supabase/schema.sql has been run.');
-    })();
-    return () => { alive = false; };
-  }, [userId]);
-
-  if (error) return <AccountProblem message={error} />;
-  if (!profile) return <Splash label="Signing in…" />;
-  if (!profile.active) return <AccountProblem message="Your account has been deactivated. Ask a CMMS admin to re-activate it." />;
+function SignedIn({ profile }) {
+  if (!profile?.active) return <AccountProblem message="Your account has been deactivated. Ask a CMMS admin to re-activate it." />;
   return (
     <DataProvider profile={profile}>
       <GlobalActionsProvider>
@@ -96,9 +78,10 @@ function SignedIn({ userId }) {
 }
 
 function AccountProblem({ message }) {
+  const { signOut } = useSession();
   return (
     <div className="content">
-      <EmptyState title="Can't open the CMMS" action={<button className="btn" onClick={() => supabase.auth.signOut()}>Sign out</button>}>
+      <EmptyState title="Can't open the CMMS" action={<button className="btn" onClick={signOut}>Sign out</button>}>
         {message}
       </EmptyState>
     </div>

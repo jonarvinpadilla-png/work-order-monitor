@@ -1,9 +1,8 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { supabase } from '../supabaseClient';
 import { fetchAll } from './api';
 
 // Everything the screens list is loaded once, kept in memory and refreshed
-// when Supabase Realtime reports a change (or right after the user saves).
+// when the server reports a change (or right after the user saves).
 const DATASETS = {
   settings: { table: 'app_settings' },
   profiles: { table: 'profiles', order: 'full_name' },
@@ -48,6 +47,7 @@ export function DataProvider({ profile, children }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [siteId, setSiteIdState] = useState(readSite);
+  const [connected, setConnected] = useState(true);
   const listeners = useRef(new Set());
   const pending = useRef(new Set());
   const timer = useRef(null);
@@ -60,7 +60,7 @@ export function DataProvider({ profile, children }) {
 
   const reload = useCallback((which = keys) => load(which).catch(e => console.error('Refresh failed', e)), [load, keys]);
 
-  // Refresh after a save without waiting for Realtime (which may be off).
+  // Refresh after a save without waiting for the live update.
   const refreshTables = useCallback((...tables) => {
     const ks = new Set(tables.flatMap(t => TABLE_KEYS[t] || []));
     return reload([...ks]);
@@ -72,20 +72,51 @@ export function DataProvider({ profile, children }) {
       .then(() => alive && setLoading(false))
       .catch(e => { if (alive) { setError(e.message); setLoading(false); } });
 
-    const channel = supabase
-      .channel('cmms-live')
-      .on('postgres_changes', { event: '*', schema: 'public' }, payload => {
-        (TABLE_KEYS[payload.table] || []).forEach(k => pending.current.add(k));
-        listeners.current.forEach(fn => fn(payload.table, payload));
+    // Live updates: the server names the tables that changed; refetch those.
+    // After a dropped connection, reload everything in case we missed some.
+    let source = null;
+    let retry = null;
+    let lost = false;
+    let lostTimer = null;
+    const connect = () => {
+      source = new EventSource('/api/events');
+      source.addEventListener('change', e => {
+        let tables = [];
+        try { tables = JSON.parse(e.data).tables || []; } catch { /* ignore */ }
+        tables.forEach(t => (TABLE_KEYS[t] || []).forEach(k => pending.current.add(k)));
+        tables.forEach(t => listeners.current.forEach(fn => fn(t)));
         clearTimeout(timer.current);
         timer.current = setTimeout(() => {
           const which = [...pending.current];
           pending.current.clear();
           reload(which);
         }, 300);
-      })
-      .subscribe();
-    return () => { alive = false; clearTimeout(timer.current); supabase.removeChannel(channel); };
+      });
+      source.onopen = () => {
+        clearTimeout(lostTimer);
+        lostTimer = null;
+        setConnected(true);
+        if (lost) { lost = false; reload(); }
+      };
+      source.onerror = () => {
+        lost = true;
+        // Retries fire every few seconds; start the notice timer only once.
+        lostTimer ??= setTimeout(() => { lostTimer = null; if (alive) setConnected(false); }, 4000);
+        // The browser retries by itself unless the server refused the stream.
+        if (source.readyState === EventSource.CLOSED) {
+          clearTimeout(retry);
+          retry = setTimeout(() => alive && connect(), 5000);
+        }
+      };
+    };
+    connect();
+    return () => {
+      alive = false;
+      clearTimeout(timer.current);
+      clearTimeout(retry);
+      clearTimeout(lostTimer);
+      source?.close();
+    };
   }, [keys, load, reload]);
 
   const subscribe = useCallback(fn => {
@@ -104,7 +135,7 @@ export function DataProvider({ profile, children }) {
     return {
       ...data,
       settings: data.settings[0] || {},
-      loading, error, reload, refreshTables, subscribe,
+      loading, error, reload, refreshTables, subscribe, connected,
       me,
       isAdmin: me.role === 'admin',
       isStaff: me.role === 'admin' || me.role === 'technician',
@@ -124,7 +155,7 @@ export function DataProvider({ profile, children }) {
         summary: byId(data.woSummary, 'work_order_id')
       }
     };
-  }, [data, loading, error, reload, refreshTables, subscribe, profile, siteId, setSiteId]);
+  }, [data, loading, error, reload, refreshTables, subscribe, connected, profile, siteId, setSiteId]);
 
   return <DataContext.Provider value={value}>{children}</DataContext.Provider>;
 }

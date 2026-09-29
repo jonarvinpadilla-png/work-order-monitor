@@ -1,16 +1,18 @@
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useData } from '../data/DataProvider';
-import { db } from '../data/api';
+import { admin, auth, db } from '../data/api';
 import { useAction, useToast } from '../components/Toast';
 import { Badge, Card, ConfirmButton, DataTable, EmptyState, Field, FormModal, Options, PageHead, Tabs, personName } from '../components/ui';
 import { Icon } from '../lib/icons';
 import { LOCATION_KINDS, MHE_TYPES, ROLES, TEMP_ZONES, roleLabel } from '../lib/constants';
 import { locationTree } from '../lib/domain';
-import { fmtDate } from '../lib/format';
+import { useRoute } from '../lib/router';
+import { fmtDate, fmtDateTime } from '../lib/format';
 
 export default function Settings() {
   const { isAdmin } = useData();
-  const [tab, setTab] = useState('profile');
+  const route = useRoute();
+  const [tab, setTab] = useState(() => (isAdmin && route.query.get('tab')) || 'profile');
   const tabs = [
     { value: 'profile', label: 'My profile' },
     ...(isAdmin ? [
@@ -25,7 +27,7 @@ export default function Settings() {
     <>
       <PageHead eyebrow="Setup" title={isAdmin ? 'Settings' : 'My profile'} />
       {tabs.length > 1 && <Tabs items={tabs} value={tab} onChange={setTab} />}
-      {tab === 'profile' && <Profile />}
+      {tab === 'profile' && <><Profile /><ChangePassword /></>}
       {tab === 'users' && <Users />}
       {tab === 'places' && <Places />}
       {tab === 'categories' && <Categories />}
@@ -55,15 +57,118 @@ function Profile() {
   );
 }
 
+function ChangePassword() {
+  const [run, busy] = useAction();
+  const [f, setF] = useState({ current: '', next: '', again: '' });
+  const [error, setError] = useState('');
+  const submit = e => {
+    e.preventDefault();
+    setError('');
+    if (f.next !== f.again) { setError('The two new passwords are different.'); return; }
+    run(async () => {
+      await auth.changePassword(f.current, f.next);
+      setF({ current: '', next: '', again: '' });
+    }, 'Password changed. Any other devices you were signed in on have been signed out.');
+  };
+  return (
+    <div className="card card-pad" style={{ maxWidth: 620, marginTop: 16 }}>
+      <div className="card-title" style={{ marginBottom: 12 }}>Change password</div>
+      <form onSubmit={submit}>
+        {error && <div className="form-error" style={{ marginBottom: 12 }}>{error}</div>}
+        <div className="form-grid">
+          <Field label="Current password" span><input className="input" type="password" required value={f.current} onChange={e => setF({ ...f, current: e.target.value })} autoComplete="current-password" /></Field>
+          <Field label="New password" hint="At least 8 characters."><input className="input" type="password" required minLength={8} value={f.next} onChange={e => setF({ ...f, next: e.target.value })} autoComplete="new-password" /></Field>
+          <Field label="New password again"><input className="input" type="password" required minLength={8} value={f.again} onChange={e => setF({ ...f, again: e.target.value })} autoComplete="new-password" /></Field>
+        </div>
+        <div style={{ marginTop: 16 }}><button className="btn" disabled={busy}>Change password</button></div>
+      </form>
+    </div>
+  );
+}
+
+// Easy to read aloud or copy: k7mq-2xpd-9rts (no 0/O, 1/l/I).
+function tempPassword() {
+  const abc = 'abcdefghjkmnpqrstuvwxyz23456789';
+  const bytes = crypto.getRandomValues(new Uint8Array(12));
+  const chars = [...bytes].map(b => abc[b % abc.length]);
+  return [0, 4, 8].map(i => chars.slice(i, i + 4).join('')).join('-');
+}
+
+function AddUserModal({ onClose }) {
+  const { refreshTables } = useData();
+  const toast = useToast();
+  const [f, setF] = useState({ full_name: '', email: '', role: 'requester', password: tempPassword() });
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  async function save() {
+    setError('');
+    setBusy(true);
+    try {
+      const p = await admin.createUser({ ...f, full_name: f.full_name.trim(), email: f.email.trim() });
+      await refreshTables('profiles');
+      toast(`${personName(p)} added. Give them the temporary password.`);
+      onClose();
+    } catch (e) {
+      setError(e.message);
+      setBusy(false);
+    }
+  }
+  return (
+    <FormModal title="Add a person" onClose={onClose} onSubmit={save} busy={busy} error={error} submitLabel="Add person">
+      <div className="form-grid">
+        <Field label="Full name" required span><input className="input" required value={f.full_name} onChange={e => setF({ ...f, full_name: e.target.value })} /></Field>
+        <Field label="Work email" required hint="They sign in with this."><input className="input" type="email" required value={f.email} onChange={e => setF({ ...f, email: e.target.value })} /></Field>
+        <Field label="Role"><select className="select" value={f.role} onChange={e => setF({ ...f, role: e.target.value })}>{ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}</select></Field>
+        <Field label="Temporary password" required span hint="Give this to them. They choose their own password the first time they sign in.">
+          <input className="input mono" required minLength={8} value={f.password} onChange={e => setF({ ...f, password: e.target.value })} />
+        </Field>
+      </div>
+    </FormModal>
+  );
+}
+
+function ResetPasswordModal({ person, onClose }) {
+  const toast = useToast();
+  const [password, setPassword] = useState(tempPassword);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  async function save() {
+    setError('');
+    setBusy(true);
+    try {
+      await admin.resetPassword(person.id, password);
+      toast(`Temporary password set for ${personName(person)}.`);
+      onClose();
+    } catch (e) {
+      setError(e.message);
+      setBusy(false);
+    }
+  }
+  return (
+    <FormModal title={`Reset password · ${personName(person)}`} onClose={onClose} onSubmit={save} busy={busy} error={error} submitLabel="Set temporary password">
+      <p className="dim" style={{ marginTop: 0 }}>They are signed out on every device and must choose a new password when they next sign in.</p>
+      <Field label="Temporary password" required hint="Give this to them in person or by text.">
+        <input className="input mono" required minLength={8} value={password} onChange={e => setPassword(e.target.value)} />
+      </Field>
+    </FormModal>
+  );
+}
+
 function Users() {
-  const { profiles, me, refreshTables } = useData();
+  const { profiles, me, settings, refreshTables } = useData();
   const [run] = useAction();
+  const [modal, setModal] = useState(null); // { kind: 'add' } | { kind: 'reset', person }
   const update = (p, patch, msg) => run(async () => { await db.update('profiles', p.id, patch); await refreshTables('profiles'); }, msg);
   return (
     <>
-      <div className="form-note" style={{ marginBottom: 14 }}>
-        Colleagues create their own account on the sign-in page and start as <b>Requesters</b>. Give technicians and managers their role here.
-        To stop someone signing in, deactivate them.
+      <div className="toolbar">
+        <span className="dim" style={{ maxWidth: 720 }}>
+          Add people here with a temporary password; they choose their own when they first sign in.
+          {settings.allow_signup ? <> Colleagues can also create their own account on the sign-in page and start as <b>Requesters</b>.</> : null}
+          {' '}To stop someone signing in, deactivate them.
+        </span>
+        <span style={{ flex: 1 }} />
+        <button className="btn btn-primary" onClick={() => setModal({ kind: 'add' })}><Icon.Plus />Add person</button>
       </div>
       <div className="card">
         <DataTable rows={profiles} initialSort={{ key: 'name', dir: 'asc' }}
@@ -81,6 +186,12 @@ function Users() {
             },
             { key: 'since', label: 'Joined', sort: p => p.created_at, render: p => fmtDate(p.created_at) },
             {
+              key: 'password', label: 'Password',
+              render: p => p.id === me.id
+                ? <span className="mute" style={{ fontSize: 13 }}>Change it under My profile</span>
+                : <button className="btn btn-sm" onClick={() => setModal({ kind: 'reset', person: p })}><Icon.Lock />Reset</button>
+            },
+            {
               key: 'active', label: 'Access', sort: p => (p.active ? 0 : 1),
               render: p => p.active
                 ? (p.id === me.id ? <Badge tone="good">Active</Badge> : <button className="btn btn-sm" onClick={() => update(p, { active: false }, `${personName(p)} deactivated.`)}>Deactivate</button>)
@@ -91,6 +202,8 @@ function Users() {
       <div className="grid grid-3" style={{ marginTop: 16 }}>
         {ROLES.map(r => <div key={r.value} className="card card-pad"><div className="card-title" style={{ marginBottom: 4 }}>{r.label}</div><div className="dim" style={{ fontSize: 14 }}>{r.help}</div></div>)}
       </div>
+      {modal?.kind === 'add' && <AddUserModal onClose={() => setModal(null)} />}
+      {modal?.kind === 'reset' && <ResetPasswordModal person={modal.person} onClose={() => setModal(null)} />}
     </>
   );
 }
@@ -319,17 +432,113 @@ function ChecklistForm({ template, onClose }) {
 function General() {
   const { settings, refreshTables } = useData();
   const [run, busy] = useAction();
-  const [f, setF] = useState({ org_name: settings.org_name || '', labor_rate: settings.labor_rate ?? 0, timezone: settings.timezone || 'Asia/Manila' });
+  const [f, setF] = useState({
+    org_name: settings.org_name || '', labor_rate: settings.labor_rate ?? 0, timezone: settings.timezone || 'Asia/Manila',
+    allow_signup: settings.allow_signup !== false
+  });
   return (
-    <div className="card card-pad" style={{ maxWidth: 620 }}>
-      <form onSubmit={e => { e.preventDefault(); run(async () => { await db.update('app_settings', 1, { org_name: f.org_name.trim(), labor_rate: f.labor_rate || 0 }); await refreshTables('app_settings'); }, 'Settings saved.'); }}>
-        <div className="form-grid">
-          <Field label="Organisation name" hint="Printed on job cards." span><input className="input" value={f.org_name} onChange={e => setF({ ...f, org_name: e.target.value })} /></Field>
-          <Field label="Standard labour rate (₱ per hour)" hint="Used to cost logged hours. Applies to new entries."><input className="input" type="number" min="0" step="0.01" value={f.labor_rate} onChange={e => setF({ ...f, labor_rate: e.target.value })} /></Field>
-          <Field label="Time zone" hint="Used for due dates, work order numbers and PM generation."><input className="input" value={f.timezone} readOnly /></Field>
-        </div>
-        <div style={{ marginTop: 16 }}><button className="btn btn-primary" disabled={busy}>Save settings</button></div>
-      </form>
+    <div className="stack" style={{ maxWidth: 760 }}>
+      <div className="card card-pad">
+        <form onSubmit={e => { e.preventDefault(); run(async () => { await db.update('app_settings', 1, { org_name: f.org_name.trim(), labor_rate: f.labor_rate || 0, allow_signup: f.allow_signup }); await refreshTables('app_settings'); }, 'Settings saved.'); }}>
+          <div className="form-grid">
+            <Field label="Organisation name" hint="Printed on job cards." span><input className="input" value={f.org_name} onChange={e => setF({ ...f, org_name: e.target.value })} /></Field>
+            <Field label="Standard labour rate (₱ per hour)" hint="Used to cost logged hours. Applies to new entries."><input className="input" type="number" min="0" step="0.01" value={f.labor_rate} onChange={e => setF({ ...f, labor_rate: e.target.value })} /></Field>
+            <Field label="Time zone" hint="Used for due dates, work order numbers and PM generation."><input className="input" value={f.timezone} readOnly /></Field>
+            <label className="check span-2">
+              <input type="checkbox" checked={f.allow_signup} onChange={e => setF({ ...f, allow_signup: e.target.checked })} />
+              <span>Let people create their own account on the sign-in page. They start as Requesters.</span>
+            </label>
+          </div>
+          <div style={{ marginTop: 16 }}><button className="btn btn-primary" disabled={busy}>Save settings</button></div>
+        </form>
+      </div>
+      <ServerPanel />
     </div>
+  );
+}
+
+const fmtBytes = n => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} MB` : `${Math.max(1, Math.round(n / 1024))} KB`);
+
+// Where the CMMS lives: addresses for phones, backups and sample data.
+function ServerPanel() {
+  const { sites, reload } = useData();
+  const toast = useToast();
+  const [run, busy] = useAction();
+  const [info, setInfo] = useState(null);
+  const [error, setError] = useState('');
+  const [clearing, setClearing] = useState(false);
+  const load = useCallback(() => admin.info().then(setInfo).catch(e => setError(e.message)), []);
+  useEffect(() => { load(); }, [load]);
+
+  if (error) return <div className="form-error">{error}</div>;
+  if (!info) return null;
+  const phoneUrls = info.urls.filter(u => !u.includes('localhost'));
+  return (
+    <>
+      <Card title="Opening the CMMS on phones and other PCs">
+        <p className="dim" style={{ marginTop: 0 }}>Connect to the site Wi-Fi or network, then open one of these addresses. Bookmark it, or add it to the phone's home screen.</p>
+        {phoneUrls.length
+          ? <ul className="url-list">{phoneUrls.map(u => <li key={u}><code className="mono">{u}</code></li>)}</ul>
+          : <p className="mute">This PC is not connected to a network yet.</p>}
+        <p className="mute" style={{ fontSize: 13.5, marginBottom: 0 }}>
+          Server PC: <b>{info.hostname}</b> · version {info.version} · data folder <code className="mono">{info.dataDir}</code> ({fmtBytes(info.databaseBytes)})
+        </p>
+      </Card>
+
+      <Card title="Backups">
+        <p className="dim" style={{ marginTop: 0 }}>
+          The server copies the database every night at 00:30 and keeps the newest 14 copies in <code className="mono">{info.backupsDir}</code>.
+          Copy them to another drive or a shared folder now and then.
+        </p>
+        <p style={{ margin: '0 0 14px' }}>Last copy: <b>{info.lastBackupAt ? fmtDateTime(info.lastBackupAt) : 'none yet'}</b> · {info.backupCount} kept</p>
+        <div className="page-actions">
+          <button className="btn" disabled={busy} onClick={() => run(async () => { const r = await admin.backupNow(); setInfo(r); }, 'Backup saved on the server.')}><Icon.Shield />Back up now</button>
+          <a className="btn" href={admin.backupUrl} download><Icon.Download />Download a copy</a>
+        </div>
+      </Card>
+
+      <Card title="Sample data">
+        {!info.hasDemoData && sites.length === 0 ? (
+          <>
+            <p className="dim" style={{ marginTop: 0 }}>Load a sample distribution centre (Plaridel DC) with MHE units, cold rooms, docks, PM schedules, parts, vendors and permits, so you can try every screen.</p>
+            <button className="btn btn-primary" disabled={busy} onClick={() => run(async () => { await admin.loadDemo(); await reload(); await load(); }, 'Sample data loaded.')}>Load sample data</button>
+          </>
+        ) : (
+          <>
+            <p className="dim" style={{ marginTop: 0 }}>
+              {info.hasDemoData ? 'The sample site is loaded. Before you go live, remove it and enter your own site, locations and assets.' : 'Remove every site, asset, work order and record, for example to start over after training.'}
+              {' '}Accounts, settings, asset categories and checklists are kept. A backup is made first.
+            </p>
+            <button className="btn btn-danger" onClick={() => setClearing(true)}><Icon.Trash />Remove all data…</button>
+          </>
+        )}
+      </Card>
+      {clearing && <ClearDataModal onClose={() => setClearing(false)} onDone={async () => { setClearing(false); toast('All data removed. A backup was saved first.'); await reload(); await load(); }} />}
+    </>
+  );
+}
+
+function ClearDataModal({ onClose, onDone }) {
+  const [text, setText] = useState('');
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  async function save() {
+    setBusy(true);
+    try {
+      await admin.clearData(text.trim());
+      await onDone();
+    } catch (e) {
+      setError(e.message);
+      setBusy(false);
+    }
+  }
+  return (
+    <FormModal title="Remove all data" onClose={onClose} onSubmit={save} busy={busy} error={error} submitLabel="Remove everything">
+      <p style={{ marginTop: 0 }}>This deletes every site, location, asset, work order, PM schedule, part, vendor, contract, pre-use check and compliance record.</p>
+      <p className="dim">A backup is saved on the server first, so an admin can restore it if this was a mistake.</p>
+      <Field label="Type DELETE to confirm" required>
+        <input className="input" value={text} onChange={e => setText(e.target.value)} autoComplete="off" />
+      </Field>
+    </FormModal>
   );
 }

@@ -4,7 +4,9 @@ A maintenance management system (CMMS), in the style of Limble, for **HAVI Logis
 facilities and material handling equipment (MHE)**. Delivery fleet (trucks, trailers, reefer units)
 is deliberately left out.
 
-Everyone signs in to the same live, shared data from a desk or a phone.
+It runs on **one PC at the site**. Everyone else (office PCs, technicians' phones, MHE operators
+doing pre-use checks) opens it in a browser over the site network and works on the same live data.
+There is no cloud service to sign up for: no Vercel, no Supabase, and no internet needed.
 
 | Module | What it does |
 |---|---|
@@ -31,76 +33,100 @@ Everyone signs in to the same live, shared data from a desk or a phone.
 ### Look and feel
 
 Warehouse illustrations run from sign-in to the main screens. The sign-in screen shows a freezer
-aisle with a reach truck at work, sign-up shows the loading docks, and password reset shows the
-battery charging room. The loading screen continues the freezer aisle. The dashboard opens with a
+aisle with a reach truck at work, sign-up and first-run setup show the loading docks, and choosing a
+new password shows the battery charging room. The loading screen continues the freezer aisle. The dashboard opens with a
 cutaway of the DC (office, dry, chiller, freezer and docks) that shows **live open-job counts per
 zone** and switches between day and night with the light/dark theme. Each MHE type (reach truck,
 forklift, pallet truck, stacker, order picker, scissor lift and more) has its own drawing on the MHE
 board and the pre-use check. To use real site photos on the sign-in screens or requester home
 instead, see `src/photos/README.md`.
 
-These rules are enforced inside the database (row-level security), not just hidden in the screens.
-The **first person to sign up becomes the admin**. Everyone after that starts as a Requester until an
-admin changes their role in **Settings → Users & roles**.
+These rules are enforced by the CMMS server on every request, not just hidden in the screens. The
+**first account, created on the server PC, is the admin**. The admin adds people with a temporary
+password, or lets them create their own Requester account on the sign-in page, and changes roles in
+**Settings → Users & roles**.
 
 ---
 
 ## Setting it up
 
-It's the same stack as before: a React front end on Vercel and a free Supabase database. It takes
-about 20 minutes and no coding.
+You need one Windows PC that stays on during every shift and is on the same network (Wi-Fi) as the
+phones and PCs that will use the CMMS. Setting up takes about 10 minutes and no coding.
 
-### Step 1: Create the database (Supabase)
+### Step 1: Get the package
 
-1. Go to **supabase.com** → **New project**. Use a **new project** for the CMMS (recommended), and
-   save the database password somewhere safe.
-2. Open **SQL Editor → New query**, paste the whole of `supabase/schema.sql`, and click **Run**.
-   This creates every table, the automatic rules (PM generation, lockouts, stock ledger) and the
-   security rules. It is safe to run again later.
-3. Open **Project Settings → API** and copy the **Project URL** and the **anon public** key.
+Download the latest **HLPI-CMMS** package:
 
-### Step 2: Deploy the app (Vercel)
+- from this repository's **Releases** page (`HLPI-CMMS-<version>-win-x64.zip`), or
+- from **Actions → Test and package →** the latest run on `main` **→ Artifacts → HLPI-CMMS-windows**.
 
-1. In Vercel, open the existing project for this repository, or **Add New → Project** and select it.
-2. Under **Settings → Environment Variables**, set:
-   - `VITE_SUPABASE_URL` → the Project URL
-   - `VITE_SUPABASE_ANON_KEY` → the anon public key
-3. Redeploy. You get an address like `https://hlpi-cmms.vercel.app`.
-4. Back in Supabase, open **Authentication → URL Configuration** and set **Site URL** to that address,
-   so sign-up confirmation and password-reset emails link back to the app.
+Before unzipping, right-click the zip → **Properties → Unblock** so Windows doesn't warn about each
+file. Unzip it somewhere permanent, for example `C:\HLPI-CMMS`.
 
-### Step 3: Sign in and set up
+### Step 2: Start it
 
-1. Open the app and **Create an account**. The first account is the admin.
-2. *Optional, to explore first:* in the SQL Editor, run `supabase/seed_demo.sql`. It loads a sample
+Double-click **Start HLPI CMMS**. A black window opens and your browser shows the CMMS. The first
+time, Windows may ask:
+
+- *"Do you want to run this file?"* or *"Windows protected your PC"*: choose **Run** (or **More info →
+  Run anyway**).
+- **Windows Defender Firewall** about *Node.js JavaScript Runtime*: tick **Private networks** and click
+  **Allow access** (needs admin rights). This is what lets phones and other PCs reach the CMMS.
+
+Keep the black window open; closing it stops the CMMS for everyone. To start it automatically with
+Windows, see `README.txt` in the package.
+
+### Step 3: Create the admin account and your team
+
+1. In the browser on the server PC, create the admin account. (For safety this only works on the
+   server PC itself.)
+2. *Optional, to explore first:* click **Load sample data** on the dashboard. It adds a sample
    "Plaridel DC" with about 60 assets (reach trucks, electric pallet trucks, forklifts, freezer
    condensing units, dock levelers, genset, fire systems), PM schedules, parts, fictional vendors, a
-   compliance register and 12 weeks of history.
-3. When you're ready to go live, run `supabase/reset_data.sql` to clear the sample data. It keeps
-   users, categories and checklists. Then enter your own data under **Settings → Sites & locations**,
-   **Assets**, **PM**, **Parts**, **Vendors** and **Compliance**.
-4. Send colleagues the link. They create their own accounts. Promote technicians in
-   **Settings → Users & roles**. Warehouse staff and MHE operators can stay as Requesters.
+   compliance register and 12 weeks of history. When you're ready to go live, remove it in
+   **Settings → General → Remove all data** (it keeps users, settings, categories and checklists).
+3. Add your site and locations, then people in **Settings → Users & roles → Add person**. Each person
+   gets a temporary password and chooses their own the first time they sign in.
 
-To stop open sign-ups, go to Supabase → **Authentication → Providers → Email** and turn off
-"Allow new users to sign up", then invite people from **Authentication → Users**.
+### Step 4: Open it on phones and other PCs
 
-### Optional: daily PM generation even when nobody logs in
+The black window, and **Settings → General**, list addresses such as `http://192.168.1.20:8080`.
+Open one on any phone or PC on the same network and bookmark it (on phones, *Add to Home screen*).
+Ask IT to reserve a fixed IP address for the server PC so the address never changes.
 
-The app creates due PM work orders whenever a technician or admin opens it. To also have it happen
-at 05:50 every morning, enable the **pg_cron** extension (Supabase → Database → Extensions) and run
-`supabase/cron.sql` once.
+### Your data and backups
+
+Everything lives in the `data` folder next to **Start HLPI CMMS**: `data\cmms.db` is the database, and
+`data\backups\` gets a copy every night at 00:30 (the newest 14 are kept). Copy the backups to another
+drive or a shared folder regularly. Admins can also **Back up now** or **Download a copy** under
+**Settings → General**.
+
+To restore: close the black window, delete `data\cmms.db-wal` and `data\cmms.db-shm` if they exist, copy
+the backup over `data\cmms.db`, and start again.
+
+To update to a new version, close the black window and unzip the new package over the old folder.
+The `data` folder isn't in the package, so your records stay.
+
+### Passwords and access
+
+- Passwords are stored as salted scrypt hashes. After too many wrong attempts, sign-in pauses for 15
+  minutes.
+- There is no email, so **Forgot password** asks people to see an admin, who sets a temporary password
+  in **Settings → Users & roles**. That signs the person out everywhere, and they choose a new password
+  at their next sign-in.
+- To stop self sign-up, untick it in **Settings → General**. To lock someone out, deactivate them.
+- The CMMS uses plain HTTP inside your network, as most in-house tools do. It only answers to IP
+  addresses, `localhost` and the PC's own name. If IT gives the PC a DNS name, add it to
+  `CMMS_ALLOWED_HOSTS` in **Start HLPI CMMS.bat**.
 
 ---
 
 ## Coming from the old Work Order Monitor
 
-- **New Supabase project (recommended):** nothing to migrate. To keep old records, export them to
-  CSV from the old app first.
-- **Same Supabase project:** `schema.sql` renames the old `work_orders` table to
-  `work_orders_legacy` instead of deleting it. After creating your site in the app, run
-  `supabase/import_legacy.sql` to copy the old work orders across. Their codes are kept, and
-  facilities become locations.
+The old app kept its work orders in Supabase. This version doesn't read from Supabase, so to keep old
+records, export them from the Supabase table editor to CSV before you shut that project down. The
+Vercel deployment is switched off in `vercel.json`. Once you no longer need the old site, delete
+the project in Vercel and pause or delete the Supabase project.
 
 ---
 
@@ -118,22 +144,33 @@ at 05:50 every morning, enable the **pg_cron** extension (Supabase → Database 
 - **Stock:** quantities change only through stock movements. Issuing a part to a work order charges
   its cost to that job, and returns credit it back. Only admins can make count adjustments.
 - **Costs:** labour uses the standard rate in **Settings → General**, plus parts and contractor cost.
+- **Every morning at 05:50** (and whenever the server starts or a technician opens the app) the server
+  creates the PM work orders that have come due. **Every night at 00:30** it saves a backup.
 
 ---
 
 ## For developers
 
+Node.js 22.13 or newer (24 LTS recommended). The server uses only Node's built-in modules, including
+its built-in SQLite, so there's no database to install.
+
 ```
 npm install
-cp .env.example .env      # fill in your Supabase URL and anon key
-npm run dev               # http://localhost:5173
-npm test                  # unit tests for KPIs, dates and PM maths
+npm run server      # CMMS server on http://localhost:8080 (data in ./data), restarts on changes
+npm run dev         # web app with hot reload on http://localhost:5173, /api goes to the server
+npm test            # unit tests plus server tests: rules, permissions, accounts, HTTP, sample data
+npm run build       # build the web app into dist/
+npm start           # production mode: the server also serves dist/
+npm run package     # Windows package in release/ (downloads a checksum-verified Node.js runtime)
 ```
 
-`scripts/test-db.sh` runs the schema (twice), 52 behaviour tests for roles, security and
-triggers, the demo seed, the reset and the upgrade path from the old app against a local Postgres
-(`PGHOST=/tmp PGPORT=5432 PGUSER=postgres scripts/test-db.sh`).
+Server options: `--port`, `--data <folder>`, `--open`; environment `PORT`, `CMMS_DATA_DIR`,
+`CMMS_ALLOWED_HOSTS` and `CMMS_REMOTE_SETUP=1` (create the first admin from another device, e.g. on
+a headless server).
 
 Code map: `src/pages/` (one file per screen), `src/components/` (shared UI, charts, layout),
-`src/data/` (loading, live updates and saving), `src/lib/` (dates, KPIs, domain rules),
-`src/illustrations/` (hand-built SVG scenes and MHE drawings), and `supabase/` (database).
+`src/data/` (API client, loading, live updates), `src/lib/` (dates, KPIs, domain rules),
+`src/illustrations/` (hand-built SVG scenes and MHE drawings), and `server/`: `schema.sql` (tables),
+`rules.js` (business rules: codes, approvals, stock ledger, PM roll-forward, pre-use lockout),
+`access.js` (who can see and change what), `auth.js` (accounts and sessions), `app.js` (HTTP API,
+live updates, static files), `demo.js` (sample data) and `test/`.
