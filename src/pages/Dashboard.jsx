@@ -1,11 +1,12 @@
 import { useMemo } from 'react';
 import { useData } from '../data/DataProvider';
-import { AssetStatusBadge, AssetTag, Badge, Card, DueBadge, PageHead, PriorityBadge, Tile, WoCode } from '../components/ui';
+import { AssetStatusBadge, AssetTag, Badge, Card, DueBadge, PriorityBadge, Tile, WoCode } from '../components/ui';
+import DcCutaway, { DC_ZONES } from '../illustrations/DcCutaway';
 import { BarList, ColumnChart, MeterBar } from '../components/Charts';
 import { Icon } from '../lib/icons';
 import { href, navigate } from '../lib/router';
 import { PRIORITY_RANK } from '../lib/constants';
-import { expiryInfo, isActive, isMheUnit, isOverdue, stockInfo } from '../lib/domain';
+import { expiryInfo, isActive, isMheUnit, isOverdue, stockInfo, zoneOf } from '../lib/domain';
 import { backlogAging, mheAvailability, mttr, plannedShare, pmCompliance, topProblemAssets, weeklyThroughput } from '../lib/kpi';
 import { daysUntil, fmtMoney, fmtNum, fmtShortDate, parseDate, todayStr } from '../lib/format';
 
@@ -49,7 +50,12 @@ export default function Dashboard() {
         ...units.filter(a => a.cert_expiry && daysUntil(a.cert_expiry) <= 30)
           .map(a => ({ id: 'a' + a.id, label: `${a.code} inspection certificate`, kind: 'MHE', date: a.cert_expiry, to: `/assets/${a.id}` }))
       ].sort((a, b) => a.date.localeCompare(b.date)),
-      reorder: d.parts.filter(p => inSite(p) && p.active && stockInfo(p).low)
+      reorder: d.parts.filter(p => inSite(p) && p.active && stockInfo(p).low),
+      zones: active.reduce((acc, w) => {
+        const z = zoneOf(w.location_id || lookup.asset[w.asset_id]?.location_id, lookup.location);
+        if (z) acc[z] = (acc[z] || 0) + 1;
+        return acc;
+      }, {})
     };
   }, [d.workOrders, d.assets, d.checks, d.statusLog, d.compliance, d.contracts, d.parts, inSite, lookup, today]);
 
@@ -58,10 +64,21 @@ export default function Dashboard() {
 
   return (
     <>
-      <PageHead eyebrow={`${site} · ${dateLabel}`} title="Maintenance overview"
-                sub={m.unitsDown.length || m.overdue.length
-                  ? `${m.overdue.length} overdue ${m.overdue.length === 1 ? 'job' : 'jobs'} and ${m.unitsDown.length} MHE ${m.unitsDown.length === 1 ? 'unit' : 'units'} not fully operational.`
-                  : 'Nothing overdue and every MHE unit is operational.'} />
+      <section className="site-banner">
+        <DcCutaway className="site-banner-art" counts={m.zones} />
+        <div className="site-banner-text">
+          <div className="eyebrow">{site} · {dateLabel}</div>
+          <h1 className="page-title">Maintenance overview</h1>
+          <p className="page-sub">
+            {m.unitsDown.length || m.overdue.length
+              ? `${m.overdue.length} overdue ${m.overdue.length === 1 ? 'job' : 'jobs'} and ${m.unitsDown.length} MHE ${m.unitsDown.length === 1 ? 'unit' : 'units'} not fully operational.`
+              : 'Nothing overdue and every MHE unit is operational.'}
+          </p>
+        </div>
+        <ul className="sr-only">
+          {DC_ZONES.map(z => <li key={z.key}>{z.label}: {m.zones[z.key] || 0} open work orders</li>)}
+        </ul>
+      </section>
 
       <div className="tiles">
         <Tile label="Open work orders" icon={Icon.Wrench} value={m.active.length}

@@ -7,6 +7,7 @@ import { href, navigate } from '../lib/router';
 import { MHE_SUPPORT_TYPES } from '../lib/constants';
 import { expiryInfo, isActive, isMheUnit, pmNextInfo } from '../lib/domain';
 import { fmtDateTime, fmtTime, parseDate, todayStr } from '../lib/format';
+import MheArt from '../illustrations/Mhe';
 
 export default function MheHub() {
   const d = useData();
@@ -113,6 +114,7 @@ function UnitCard({ asset: a, check, checkedToday }) {
         <AssetStatusBadge status={a.status} />
       </div>
       <div className="unit-type">{a.mhe_type} · {[a.make, a.model].filter(Boolean).join(' ')}</div>
+      <div className="unit-art"><MheArt type={a.mhe_type} spot={!locked} /></div>
       <div className="unit-body">
         <div className="unit-line"><span className="k">Area</span><span>{lookup.location[a.location_id]?.name || '—'}</span></div>
         {!manual && <div className="unit-line"><span className="k">Hour meter</span><HourMeter value={a.current_meter} /></div>}

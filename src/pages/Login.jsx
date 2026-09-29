@@ -2,6 +2,36 @@ import { useState } from 'react';
 import { supabase } from '../supabaseClient';
 import { Field } from '../components/ui';
 import { useToast } from '../components/Toast';
+import { ChargingRoom, FreezerAisle, LoadingDock } from '../illustrations/scenes';
+import { Icon } from '../lib/icons';
+import { photoFor } from '../illustrations/photos';
+
+const SCENES = {
+  signin: { Scene: FreezerAisle, caption: 'Freezer aisle F07 · −22.4 °C' },
+  signup: { Scene: LoadingDock, caption: 'Loading docks · first light' },
+  reset: { Scene: ChargingRoom, caption: 'Battery charging room' }
+};
+
+// Left half of the sign-in screens: a warehouse scene with the headline over it.
+export function AuthArt({ mode, children }) {
+  const key = SCENES[mode] ? mode : 'signin';
+  const { Scene, caption } = SCENES[key];
+  const photo = photoFor(key);
+  return (
+    <div className="auth-art">
+      {photo ? <img className="auth-scene" src={photo} alt="" /> : <Scene className="auth-scene" />}
+      <div className="auth-brand-row">
+        <span className="brand-mark"><Icon.Forklift /></span>
+        <div>
+          <div className="brand-name">HLPI Facilities</div>
+          <div className="brand-sub">CMMS · Facilities &amp; MHE</div>
+        </div>
+      </div>
+      <div className="auth-copy">{children}</div>
+      {!photo && <span className="auth-caption">{caption}</span>}
+    </div>
+  );
+}
 
 export default function Login() {
   const [mode, setMode] = useState('signin'); // signin | signup | reset
@@ -40,10 +70,10 @@ export default function Login() {
 
   return (
     <div className="auth">
-      <div className="auth-art">
+      <AuthArt mode={mode}>
         <h1>Keep every dock, cold room and <span>forklift</span> running.</h1>
         <p>Work orders, preventive maintenance, MHE pre-use checks, spare parts and permits for HAVI Logistics Philippines facilities — in one shared register.</p>
-      </div>
+      </AuthArt>
       <div className="auth-panel">
         <h2>{mode === 'signin' ? 'Sign in' : mode === 'signup' ? 'Create your account' : 'Reset your password'}</h2>
         <p className="dim" style={{ margin: 0 }}>
@@ -99,7 +129,7 @@ export function SetNewPassword({ onDone }) {
   }
   return (
     <div className="auth">
-      <div className="auth-art"><h1>Set a new <span>password</span>.</h1></div>
+      <AuthArt mode="reset"><h1>Set a new <span>password</span>.</h1></AuthArt>
       <div className="auth-panel">
         <h2>Choose a new password</h2>
         <form onSubmit={submit}>

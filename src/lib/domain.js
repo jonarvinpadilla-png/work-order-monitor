@@ -53,6 +53,22 @@ export function locationPath(loc, byId) {
   return parts.join(' › ');
 }
 
+// Which part of the DC a location belongs to, for the dashboard cutaway:
+// freezer / chiller / dry storage by temperature zone, docks, or office.
+export function zoneOf(locationId, byId) {
+  let loc = byId[locationId];
+  let guard = 0;
+  while (loc && guard++ < 8) {
+    if (loc.temp_zone === 'Freezer') return 'freezer';
+    if (loc.temp_zone === 'Chiller') return 'chiller';
+    if (loc.kind === 'Dock' || /dock/i.test(loc.name)) return 'docks';
+    if (loc.temp_zone === 'Ambient') return 'dry';
+    if (/office|admin|canteen|locker/i.test(loc.name)) return 'office';
+    loc = loc.parent_id ? byId[loc.parent_id] : null;
+  }
+  return null;
+}
+
 // Locations ordered as a tree with depth, for indented pickers.
 export function locationTree(locations, siteId) {
   const list = locations.filter(l => !siteId || l.site_id === siteId);

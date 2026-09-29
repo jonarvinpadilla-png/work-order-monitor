@@ -1,7 +1,9 @@
 import { useMemo } from 'react';
 import { useData } from '../data/DataProvider';
 import { useGlobalActions } from '../components/GlobalActions';
-import { AssetTag, Card, EmptyState, PageHead, StatusBadge, WoCode, personName } from '../components/ui';
+import { AssetTag, Card, EmptyState, StatusBadge, WoCode, personName } from '../components/ui';
+import { LoadingDock } from '../illustrations/scenes';
+import { photoFor } from '../illustrations/photos';
 import { Icon } from '../lib/icons';
 import { href, navigate } from '../lib/router';
 import { isClosed } from '../lib/domain';
@@ -33,8 +35,14 @@ export default function RequesterHome() {
 
   return (
     <>
-      <PageHead eyebrow={`Hello, ${(me.full_name || me.email).split(' ')[0]}`} title="My requests"
-                sub="Report anything broken, unsafe or not working, and run your MHE pre-use check before each shift." />
+      <section className="scene-banner">
+        {photoFor('requester') ? <img className="scene-banner-art" src={photoFor('requester')} alt="" /> : <LoadingDock className="scene-banner-art" />}
+        <div className="scene-banner-text">
+          <div className="eyebrow">Hello, {(me.full_name || me.email).split(' ')[0]}</div>
+          <h1 className="page-title">My requests</h1>
+          <p className="page-sub">Report anything broken, unsafe or not working, and run your MHE pre-use check before each shift.</p>
+        </div>
+      </section>
       <div className="grid grid-2" style={{ marginBottom: 16 }}>
         <button className="tile clickable" style={{ textAlign: 'left', font: 'inherit' }} onClick={() => newRequest()}>
           <div className="tile-label"><Icon.Wrench />Something broken or unsafe?</div>

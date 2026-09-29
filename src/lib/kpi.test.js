@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { backlogAging, mheAvailability, mttr, pmCompliance, weeklyThroughput } from './kpi.js';
 import { addInterval, daysUntil } from './format.js';
-import { dueInfo, pmForecast, pmNextInfo, stockInfo } from './domain.js';
+import { dueInfo, pmForecast, pmNextInfo, stockInfo, zoneOf } from './domain.js';
 
 const now = new Date('2026-09-29T10:00:00');
 
@@ -100,4 +100,22 @@ test('stock status', () => {
   assert.equal(stockInfo({ qty_on_hand: 0, min_qty: 2 }).label, 'Out of stock');
   assert.equal(stockInfo({ qty_on_hand: 2, min_qty: 2 }).label, 'Reorder');
   assert.equal(stockInfo({ qty_on_hand: 3, min_qty: 2 }).low, false);
+});
+
+test('zone mapping walks up the location tree', () => {
+  const byId = {
+    wh: { id: 'wh', name: 'Warehouse Building' },
+    frz: { id: 'frz', name: 'Freezer Room', temp_zone: 'Freezer', parent_id: 'wh' },
+    dock: { id: 'dock', name: 'Loading Docks', kind: 'Dock', parent_id: 'wh' },
+    dry: { id: 'dry', name: 'Dry Storage', temp_zone: 'Ambient', parent_id: 'wh' },
+    ob: { id: 'ob', name: 'Office Building' },
+    can: { id: 'can', name: 'Canteen & Lockers', parent_id: 'ob' },
+    pump: { id: 'pump', name: 'Pump House', parent_id: 'wh' }
+  };
+  assert.equal(zoneOf('frz', byId), 'freezer');
+  assert.equal(zoneOf('dock', byId), 'docks');
+  assert.equal(zoneOf('dry', byId), 'dry');
+  assert.equal(zoneOf('can', byId), 'office');
+  assert.equal(zoneOf('pump', byId), null);
+  assert.equal(zoneOf(undefined, byId), null);
 });

@@ -5,7 +5,8 @@ import { db } from './data/api';
 import { ToastProvider, useToast } from './components/Toast';
 import { GlobalActionsProvider } from './components/GlobalActions';
 import Layout from './components/Layout';
-import { EmptyState, Loading } from './components/ui';
+import { EmptyState } from './components/ui';
+import Splash from './components/Splash';
 import { useRoute } from './lib/router';
 import { plural } from './lib/format';
 import Login, { SetNewPassword } from './pages/Login';
@@ -40,7 +41,7 @@ export default function App() {
   }, []);
 
   if (!isConfigured) return <SetupNeeded />;
-  if (loading) return <Loading />;
+  if (loading) return <Splash />;
   return (
     <ToastProvider>
       {recovery ? <SetNewPassword onDone={() => setRecovery(false)} />
@@ -83,7 +84,7 @@ function SignedIn({ userId }) {
   }, [userId]);
 
   if (error) return <AccountProblem message={error} />;
-  if (!profile) return <Loading label="Signing in…" />;
+  if (!profile) return <Splash label="Signing in…" />;
   if (!profile.active) return <AccountProblem message="Your account has been deactivated. Ask a CMMS admin to re-activate it." />;
   return (
     <DataProvider profile={profile}>
@@ -124,7 +125,7 @@ function Shell() {
       .catch(e => console.warn('PM generation skipped:', e.message));
   }, [data.loading, data.isStaff]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (data.loading) return <Loading label="Loading your facility…" />;
+  if (data.loading) return <Splash label="Loading your facility…" />;
   if (data.error) return <AccountProblem message={`Could not load data: ${data.error}`} />;
 
   const [section, id, sub] = route.segments;

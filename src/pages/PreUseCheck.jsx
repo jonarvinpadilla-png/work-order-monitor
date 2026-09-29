@@ -6,6 +6,7 @@ import { Icon } from '../lib/icons';
 import { href } from '../lib/router';
 import { SHIFTS } from '../lib/constants';
 import { fmtNum, fmtTime } from '../lib/format';
+import MheArt from '../illustrations/Mhe';
 
 function defaultShift() {
   const h = new Date().getHours();
@@ -69,7 +70,8 @@ export default function PreUseCheck({ assetId }) {
     const wo = workOrders.find(w => w.id === result.work_order_id);
     return (
       <>
-        <PageHead back={{ to: '/mhe', label: 'MHE' }} eyebrow="Pre-use check" title={`${asset.code} · ${asset.mhe_type}`} />
+        <PageHead back={{ to: '/mhe', label: 'MHE' }} eyebrow="Pre-use check" title={`${asset.code} · ${asset.mhe_type}`}
+                  actions={<MheArt type={asset.mhe_type} className={`head-art ${result.critical_fail ? 'is-locked' : ''}`} />} />
         {result.critical_fail ? (
           <div className="stack">
             <Lockout title={`${asset.code}: do not operate`}>
@@ -97,7 +99,8 @@ export default function PreUseCheck({ assetId }) {
   return (
     <>
       <PageHead back={{ to: '/mhe', label: 'MHE' }} eyebrow="Pre-use check" title={<><AssetTag asset={asset} link={false} size="lg" /> {asset.mhe_type}</>}
-                sub={[asset.make, asset.model, lookup.location[asset.location_id]?.name].filter(Boolean).join(' · ')} />
+                sub={[asset.make, asset.model, lookup.location[asset.location_id]?.name].filter(Boolean).join(' · ')}
+                actions={<MheArt type={asset.mhe_type} className={`head-art ${asset.status === 'Out of Service' ? 'is-locked' : ''}`} />} />
 
       {asset.status === 'Out of Service' ? (
         <Lockout title={`${asset.code} is locked out`}>

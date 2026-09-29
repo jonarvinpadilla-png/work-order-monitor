@@ -13,6 +13,7 @@ import { ASSET_STATUSES } from '../lib/constants';
 import { describeTrigger, expiryInfo, isActive, isMheUnit, locationPath, pmNextInfo } from '../lib/domain';
 import { fmtDate, fmtDateTime, fmtMoney, fmtNum, parseDate } from '../lib/format';
 import AssetForm from './AssetForm';
+import MheArt from '../illustrations/Mhe';
 import PmForm from './PmForm';
 
 export default function AssetDetail({ id }) {
@@ -104,6 +105,7 @@ export default function AssetDetail({ id }) {
           <div className="stack">
             {asset.mhe_type && (
               <Card title="MHE specification">
+                <MheArt type={asset.mhe_type} className={`spec-art ${asset.status === 'Out of Service' ? 'is-locked' : ''}`} />
                 <dl className="kv">
                   <dt>Type</dt><dd>{asset.mhe_type}</dd>
                   <dt>Rated capacity</dt><dd>{asset.capacity_kg ? `${fmtNum(asset.capacity_kg)} kg` : '—'}</dd>

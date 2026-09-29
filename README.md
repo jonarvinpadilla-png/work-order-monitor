@@ -28,6 +28,17 @@ Everyone signs in to the same live, shared data from a desk or a phone.
 | **Technician** | Work orders, PM schedules, assets, parts and pre-use checks. Cannot approve requests or manage users |
 | **Requester** | Report problems, run MHE pre-use checks, and follow their own requests. Sees nothing else |
 
+### Look and feel
+
+Warehouse illustrations run from sign-in to the main screens. The sign-in screen shows a freezer
+aisle with a reach truck at work, sign-up shows the loading docks, and password reset shows the
+battery charging room. The loading screen continues the freezer aisle. The dashboard opens with a
+cutaway of the DC (office, dry, chiller, freezer and docks) that shows **live open-job counts per
+zone** and switches between day and night with the light/dark theme. Each MHE type (reach truck,
+forklift, pallet truck, stacker, order picker, scissor lift and more) has its own drawing on the MHE
+board and the pre-use check. To use real site photos on the sign-in screens or requester home
+instead, see `src/photos/README.md`.
+
 These rules are enforced inside the database (row-level security), not just hidden in the screens.
 The **first person to sign up becomes the admin**. Everyone after that starts as a Requester until an
 admin changes their role in **Settings → Users & roles**.
@@ -124,5 +135,5 @@ triggers, the demo seed, the reset and the upgrade path from the old app against
 (`PGHOST=/tmp PGPORT=5432 PGUSER=postgres scripts/test-db.sh`).
 
 Code map: `src/pages/` (one file per screen), `src/components/` (shared UI, charts, layout),
-`src/data/` (loading, live updates and saving), `src/lib/` (dates, KPIs, domain rules), and
-`supabase/` (database).
+`src/data/` (loading, live updates and saving), `src/lib/` (dates, KPIs, domain rules),
+`src/illustrations/` (hand-built SVG scenes and MHE drawings), and `supabase/` (database).
