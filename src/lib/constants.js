@@ -1,52 +1,72 @@
-export const FACILITIES = ['Ambient Warehouse', 'Dry Warehouse', 'Cold Storage', 'Port Facility', 'Office / Admin', 'Other'];
-
-export const TYPES = [
-  { key: 'PM', label: 'Preventive Maintenance', color: 'teal' },
-  { key: 'Corrective', label: 'Corrective / Breakdown', color: 'rust' },
-  { key: 'Safety', label: 'Safety Corrective Action', color: 'violet' }
-];
-export const TYPE_COLOR = Object.fromEntries(TYPES.map(t => [t.key, t.color]));
-export function typeLabel(key) {
-  return TYPES.find(t => t.key === key)?.label || key;
-}
-
+export const WO_TYPES = ['Corrective', 'Preventive', 'Inspection', 'Emergency', 'Safety', 'Improvement'];
+export const WO_STATUSES = ['Requested', 'Open', 'In Progress', 'On Hold', 'Completed', 'Cancelled', 'Rejected'];
+export const ACTIVE_STATUSES = ['Open', 'In Progress', 'On Hold'];
+export const CLOSED_STATUSES = ['Completed', 'Cancelled', 'Rejected'];
 export const PRIORITIES = ['Low', 'Medium', 'High', 'Critical'];
-export const PRIORITY_COLOR = { Low: 'slate', Medium: 'amber', High: 'orange', Critical: 'red' };
+export const PRIORITY_RANK = { Critical: 0, High: 1, Medium: 2, Low: 3 };
 
-export const STATUSES = ['Open', 'In Progress', 'On Hold', 'Completed', 'Cancelled'];
-export const STATUS_COLOR = { Open: 'amber', 'In Progress': 'teal', 'On Hold': 'slate', Completed: 'green', Cancelled: 'muted' };
+export const ASSET_STATUSES = ['Operational', 'Needs Attention', 'Out of Service', 'Decommissioned'];
+export const CRITICALITY = ['Low', 'Medium', 'High', 'Critical'];
 
-export const REFERENCE_SUGGESTIONS = ['RA 11058', 'PD 1096', 'DOLE DO 198-18', 'RA 9514 (Fire Code)', 'DENR ECC', 'BFP FSIC', 'FSSC 22000'];
+// Material handling equipment. Delivery fleet (trucks, trailers) is out of scope.
+export const MHE_TYPES = [
+  'Reach Truck',
+  'Counterbalance Forklift (Electric)',
+  'Counterbalance Forklift (LPG)',
+  'Counterbalance Forklift (Diesel)',
+  'Electric Pallet Truck',
+  'Electric Stacker',
+  'Order Picker',
+  'VNA Truck',
+  'Tow Tractor',
+  'Manual Pallet Jack',
+  'Scissor Lift',
+  'Boom Lift',
+  'Traction Battery',
+  'Battery Charger'
+];
+export const MHE_SUPPORT_TYPES = ['Traction Battery', 'Battery Charger'];
+export const POWER_TYPES = ['Electric (lead-acid)', 'Electric (lithium-ion)', 'LPG', 'Diesel', 'Manual', 'Electro-hydraulic'];
+export const OWNERSHIP = ['Owned', 'Leased', 'Rented'];
 
-export function todayStr() {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
+export const TEMP_ZONES = ['Ambient', 'Chiller', 'Freezer'];
+export const LOCATION_KINDS = ['Building', 'Storage zone', 'Staging', 'Dock', 'Room', 'Utility', 'Yard'];
+export const SHIFTS = ['Shift 1', 'Shift 2', 'Shift 3'];
 
-export function formatDate(str) {
-  if (!str) return '—';
-  const d = new Date(str + 'T00:00:00');
-  return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-}
+export const FAILURE_CAUSES = [
+  'Wear and tear', 'Operator damage', 'Impact / collision', 'Loose connection', 'Electrical fault',
+  'Lack of lubrication', 'Contamination', 'Leak', 'Installation / design', 'Unknown'
+];
 
-export function daysUntil(dueDate) {
-  const start = new Date(new Date().toDateString());
-  const due = new Date(dueDate + 'T00:00:00');
-  return Math.round((due - start) / 86400000);
-}
+export const INTERVAL_UNITS = [
+  { value: 'day', one: 'day', many: 'days' },
+  { value: 'week', one: 'week', many: 'weeks' },
+  { value: 'month', one: 'month', many: 'months' },
+  { value: 'year', one: 'year', many: 'years' }
+];
+export const PM_TYPES = ['Preventive', 'Inspection', 'Safety'];
 
-export function isOverdue(o) {
-  if (o.status === 'Completed' || o.status === 'Cancelled') return false;
-  if (!o.due_date) return false;
-  return daysUntil(o.due_date) < 0;
-}
+export const PART_UNITS = ['pc', 'set', 'pair', 'L', 'm', 'kg', 'can', 'pail', 'cyl', 'box', 'roll'];
+export const STOCK_KINDS = ['Receive', 'Issue', 'Return', 'Adjust'];
 
-export function dueLabel(o) {
-  if (o.status === 'Completed') return o.date_completed ? `Completed ${formatDate(o.date_completed)}` : 'Completed';
-  if (o.status === 'Cancelled') return 'Cancelled';
-  if (!o.due_date) return 'No due date';
-  const d = daysUntil(o.due_date);
-  if (d < 0) return `Overdue ${Math.abs(d)}d`;
-  if (d === 0) return 'Due today';
-  return `Due in ${d}d`;
-}
+export const VENDOR_SERVICES = [
+  'MHE rental & maintenance', 'Refrigeration & HVAC', 'Generators & electrical', 'Fire protection & FDAS',
+  'Dock levelers & doors', 'Pest control', 'Water & wastewater testing', 'Racking inspection',
+  'Civil & building works', 'Janitorial', 'Waste management', 'Security systems', 'Calibration'
+];
+export const CONTRACT_BILLING = ['Monthly', 'Quarterly', 'Semi-annual', 'Annual', 'Per service', 'One-time'];
+
+export const COMPLIANCE_CATEGORIES = ['Permit', 'License', 'Certificate', 'Inspection', 'Testing', 'Audit', 'Training', 'Report'];
+export const ROLES = [
+  { value: 'admin', label: 'Admin / Manager', help: 'Everything, including approvals, users and settings' },
+  { value: 'technician', label: 'Technician', help: 'Work orders, PM, assets, parts and checklists' },
+  { value: 'requester', label: 'Requester', help: 'Submit requests and MHE pre-use checks, follow their own' }
+];
+export const roleLabel = r => ROLES.find(x => x.value === r)?.label || r;
+
+export const STATUS_TONE = {
+  Requested: 'violet', Open: 'outline', 'In Progress': 'info', 'On Hold': 'warn',
+  Completed: 'good', Cancelled: 'muted', Rejected: 'muted'
+};
+export const PRIORITY_TONE = { Low: 'muted', Medium: 'outline', High: 'serious', Critical: 'danger' };
+export const ASSET_TONE = { Operational: 'good', 'Needs Attention': 'warn', 'Out of Service': 'danger', Decommissioned: 'muted' };

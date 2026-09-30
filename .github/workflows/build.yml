@@ -1,0 +1,63 @@
+# Tests the CMMS and builds the Windows package on every pull request and
+# on main. The package appears under the run's "Artifacts" as
+# HLPI-CMMS-windows. Pushing a tag like v2.0.0 also publishes it as a
+# GitHub release.
+name: Test and package
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Test and build the Windows package
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run build
+      - run: npm run package
+      - name: Upload the package (unzip and run "Start HLPI CMMS")
+        uses: actions/upload-artifact@v4
+        with:
+          name: HLPI-CMMS-windows
+          path: release/HLPI-CMMS/
+          retention-days: 30
+      - name: Keep the zip for the release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-zip
+          path: release/*.zip
+          retention-days: 1
+
+  release:
+    name: Publish the release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: release-zip
+      - name: Create the GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: >
+          gh release create "$GITHUB_REF_NAME" HLPI-CMMS-*.zip
+          --repo "$GITHUB_REPOSITORY"
+          --title "HLPI Facilities CMMS $GITHUB_REF_NAME"
+          --generate-notes
