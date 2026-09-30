@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useData } from '../data/DataProvider';
 import { AssetStatusBadge, AssetTag, Badge, DataTable, LocationSelect, Options, PageHead, SearchBox } from '../components/ui';
 import { Icon } from '../lib/icons';
-import { navigate } from '../lib/router';
+import { href, navigate } from '../lib/router';
 import { ASSET_STATUSES, CRITICALITY, PRIORITY_RANK } from '../lib/constants';
 import { isActive, locationPath, pmNextInfo } from '../lib/domain';
 import { downloadCsv } from '../lib/csv';
@@ -74,6 +74,7 @@ export default function Assets() {
     <>
       <PageHead eyebrow="Equipment" title="Assets" sub="Every maintainable item in the facility, from reach trucks to roof gutters."
                 actions={<>
+                  <a className="btn" href={href('/labels')}><Icon.Tag />QR labels</a>
                   <button className="btn" onClick={exportCsv}><Icon.Download />Export CSV</button>
                   <button className="btn btn-primary" onClick={() => setAdding(true)}><Icon.Plus />Add asset</button>
                 </>} />

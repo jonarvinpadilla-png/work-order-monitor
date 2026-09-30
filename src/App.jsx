@@ -24,6 +24,8 @@ import Parts from './pages/Parts';
 import Vendors from './pages/Vendors';
 import Compliance from './pages/Compliance';
 import Settings from './pages/Settings';
+import { PlaceScan, UnitScan } from './pages/Scan';
+import Labels from './pages/Labels';
 
 export default function App() {
   const [state, setState] = useState({ status: 'loading' }); // loading | offline | signed-out | signed-in
@@ -125,6 +127,9 @@ function Shell() {
     case 'vendors': page = staffOnly(<Vendors />); break;
     case 'compliance': page = staffOnly(<Compliance />); break;
     case 'settings': page = <Settings />; break;
+    case 'u': page = <UnitScan code={id || ''} />; break;
+    case 'p': page = <PlaceScan id={id || ''} />; break;
+    case 'labels': page = staffOnly(<Labels />); break;
     default: page = <EmptyState title="Page not found">That address doesn't match anything in the CMMS.</EmptyState>;
   }
   return <Layout section={section}>{page}</Layout>;

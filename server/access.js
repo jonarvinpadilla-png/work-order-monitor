@@ -76,7 +76,7 @@ const WO_STAFF = [...WO_REQUEST, 'assigned_to', 'vendor_id', 'pm_schedule_id', '
 
 export const WRITABLE = {
   profiles: { update: ['full_name', 'phone', 'trade', 'role', 'active'] },
-  app_settings: { update: ['org_name', 'labor_rate', 'allow_signup'] },
+  app_settings: { update: ['org_name', 'labor_rate', 'allow_signup', 'label_base_url'] },
   sites: ['code', 'name', 'address'],
   locations: ['site_id', 'parent_id', 'name', 'kind', 'temp_zone'],
   asset_categories: ['name', 'is_mhe', 'sort'],

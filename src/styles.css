@@ -624,3 +624,74 @@ h1, h2, h3 { margin: 0; }
 @media (max-width: 760px) {
   .offline-bar { padding: 9px 16px; }
 }
+
+/* ------------------------------------------------ QR scan pages */
+.scan { max-width: 640px; margin: 0 auto; }
+.scan > * + * { margin-top: 16px; }
+.scan-head { display: flex; gap: 16px; align-items: center; }
+.scan-art { width: 150px; height: auto; flex: none; }
+.scan-icon { width: 72px; height: 72px; flex: none; display: grid; place-items: center; border-radius: 14px; background: var(--surface-3); color: var(--ink-2); }
+.scan-icon svg { width: 36px; height: 36px; }
+.scan-id { min-width: 0; }
+.scan-title { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 2px 0 4px; font-family: var(--font-display); font-size: 30px; line-height: 1.1; }
+.scan-name { font-size: 17px; font-weight: 700; }
+.scan-actions { display: grid; gap: 10px; }
+.btn-xl { min-height: 56px; font-size: 17px; justify-content: center; }
+.btn-xl svg { width: 20px; height: 20px; }
+.scan-note { margin: 0; font-size: 14px; }
+.scan .rows a.title { color: var(--ink); font-weight: 600; white-space: normal; overflow-wrap: anywhere; }
+.scan .rows li { font-size: 15px; }
+@media (max-width: 520px) {
+  .scan-head { flex-direction: column; align-items: flex-start; }
+  .scan-art { width: 180px; }
+}
+
+/* ------------------------------------------------ QR labels */
+.labels-layout { display: grid; grid-template-columns: minmax(0, 1fr) 340px; gap: 16px; align-items: start; }
+.labels-note { margin-bottom: 16px; }
+.labels-address { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.labels-address .input { flex: 1 1 240px; max-width: 320px; }
+.pick-list { list-style: none; margin: 0; padding: 0; max-height: 420px; overflow-y: auto; border-top: 1px solid var(--border); }
+.pick-list li { border-bottom: 1px solid var(--border); padding: 6px 2px; }
+.pick-list .check { display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 14.5px; }
+.pick-list .grow { flex: 1; min-width: 0; }
+.pick-pin { width: 15px; height: 15px; color: var(--ink-3); flex: none; }
+@media (max-width: 900px) { .labels-layout { grid-template-columns: 1fr; } }
+
+/* The sheets are real size (A4) on screen as a preview and on paper. */
+.label-sheets { display: grid; gap: 20px; justify-content: center; margin-top: 20px; overflow-x: auto; }
+.label-page {
+  page: labels; width: 210mm; height: 297mm; overflow: hidden; background: #fff; color: #000;
+  box-shadow: 0 1px 8px rgba(0, 0, 0, .28); display: grid; align-content: start;
+  font-family: var(--font-body);
+}
+.label-page.small { padding: 15.1mm 7.2mm 0; grid-template-columns: repeat(3, 63.5mm); grid-auto-rows: 38.1mm; column-gap: 2.5mm; }
+.label-page.large { padding: 13.1mm 4.65mm 0; grid-template-columns: repeat(2, 99.1mm); grid-auto-rows: 67.7mm; column-gap: 2.5mm; }
+.qr-label { display: flex; align-items: center; gap: 2mm; padding: 2.5mm 3mm; overflow: hidden; outline: 1px dashed #c4c4c4; outline-offset: -1px; }
+.qr-label-code { flex: none; }
+.small .qr-label-code { width: 31mm; height: 31mm; }
+.large .qr-label-code { width: 54mm; height: 54mm; }
+.qr-label-text { min-width: 0; display: flex; flex-direction: column; gap: .8mm; }
+.qr-label-brand { font-family: var(--font-display); font-weight: 700; text-transform: uppercase; letter-spacing: .08em; font-size: 6.5pt; border-left: 1.2mm solid #f5b800; padding-left: 1.2mm; }
+.qr-label-tag { font-family: var(--font-display); font-weight: 700; line-height: 1; letter-spacing: .02em; overflow-wrap: anywhere; font-size: 17pt; }
+.qr-label-tag.mhe { background: #f5b800; padding: .6mm 1.4mm; align-self: flex-start; border-radius: .8mm; }
+.qr-label.place .qr-label-tag { font-size: 13pt; }
+.qr-label-name { font-size: 7pt; line-height: 1.2; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.qr-label-where { font-size: 6.5pt; color: #444; }
+.qr-label-cta { font-size: 6.5pt; font-weight: 700; text-transform: uppercase; letter-spacing: .03em; margin-top: .6mm; }
+.large .qr-label-brand { font-size: 9pt; }
+.large .qr-label-tag { font-size: 30pt; }
+.large .qr-label.place .qr-label-tag { font-size: 20pt; }
+.large .qr-label-name { font-size: 10pt; -webkit-line-clamp: 3; }
+.large .qr-label-where { font-size: 9pt; }
+.large .qr-label-cta { font-size: 8.5pt; }
+@media (max-width: 900px) { .label-sheets { zoom: .42; justify-content: start; } }
+
+@page labels { size: A4 portrait; margin: 0; }
+@media print {
+  .label-sheets { display: block; margin: 0; zoom: 1; overflow: visible; }
+  .label-page { box-shadow: none; margin: 0; break-after: page; }
+  .label-page:last-child { break-after: auto; }
+  .qr-label { outline: none; }
+  .qr-label-tag.mhe { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+}

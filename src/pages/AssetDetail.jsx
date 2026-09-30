@@ -53,6 +53,7 @@ export default function AssetDetail({ id }) {
           {mhe && asset.status !== 'Out of Service' && <a className="btn" href={href(`/mhe/${asset.id}/check`)}><Icon.Clipboard />Pre-use check</a>}
           {(mhe || asset.current_meter !== null) && <button className="btn" onClick={() => setModal('meter')}><Icon.Gauge />Record hours</button>}
           <button className="btn" onClick={() => setModal('status')}><Icon.Refresh />Change status</button>
+          <a className="btn" href={href(`/labels?asset=${asset.id}`)}><Icon.Tag />QR label</a>
           <button className="btn btn-primary" onClick={() => newWorkOrder({ asset_id: asset.id, site_id: asset.site_id, location_id: asset.location_id || '' })}><Icon.Plus />Work order</button>
           <button className="icon-btn" aria-label="Edit asset" title="Edit asset" onClick={() => setModal('edit')}><Icon.Edit /></button>
         </>} />

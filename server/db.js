@@ -1,9 +1,18 @@
 import { DatabaseSync } from 'node:sqlite';
-import { readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import path from 'node:path';
 import { seedReferenceData } from './reference.js';
 import { isValidDate } from './time.js';
 
-export const SCHEMA_VERSION = 1;
+// Changes after the first release, oldest first. Entry n upgrades a
+// version n+1 database to version n+2. Never edit one that has shipped;
+// add a new entry instead.
+const MIGRATIONS = [
+  // 2: the address printed on QR labels (e.g. http://192.168.1.20:8080)
+  db => db.raw.exec('alter table app_settings add column label_base_url TEXT')
+];
+
+export const SCHEMA_VERSION = 1 + MIGRATIONS.length;
 
 // A value the client sent that doesn't fit the column. Shown to the user.
 export class ValidationError extends Error {
@@ -126,17 +135,31 @@ export class Database {
     this.migrate();
   }
 
+  // New databases get schema.sql (version 1) and then every migration;
+  // existing ones get the migrations they are missing, after a backup copy.
   migrate() {
-    const version = this.get('PRAGMA user_version').user_version;
+    let version = this.get('PRAGMA user_version').user_version;
     if (version > SCHEMA_VERSION) {
       throw new Error(`This database was saved by a newer version of HLPI Facilities CMMS (schema ${version}). Install the newer version to open it.`);
     }
     if (version === SCHEMA_VERSION) return;
+    if (version > 0 && this.file !== ':memory:') {
+      const dir = path.join(path.dirname(this.file), 'backups');
+      mkdirSync(dir, { recursive: true });
+      let copy = path.join(dir, `cmms-before-upgrade-v${SCHEMA_VERSION}.db`);
+      if (existsSync(copy)) copy = copy.replace(/\.db$/, `-${Date.now()}.db`);
+      this.backupTo(copy);
+    }
     this.tx(() => {
-      this.raw.exec(readFileSync(new URL('./schema.sql', import.meta.url), 'utf8'));
-      seedReferenceData(this);
+      if (version === 0) {
+        this.raw.exec(readFileSync(new URL('./schema.sql', import.meta.url), 'utf8'));
+        seedReferenceData(this);
+        version = 1;
+      }
+      for (let v = version; v < SCHEMA_VERSION; v++) MIGRATIONS[v - 1](this);
       this.raw.exec(`PRAGMA user_version = ${SCHEMA_VERSION}`);
     });
+    this.meta.clear();
   }
 
   prepare(sql) {

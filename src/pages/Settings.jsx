@@ -6,7 +6,7 @@ import { Badge, Card, ConfirmButton, DataTable, EmptyState, Field, FormModal, Op
 import { Icon } from '../lib/icons';
 import { LOCATION_KINDS, MHE_TYPES, ROLES, TEMP_ZONES, roleLabel } from '../lib/constants';
 import { locationTree } from '../lib/domain';
-import { useRoute } from '../lib/router';
+import { href, useRoute } from '../lib/router';
 import { fmtDate, fmtDateTime } from '../lib/format';
 
 export default function Settings() {
@@ -234,6 +234,7 @@ function Places() {
                     <div className="sub">{[l.kind, l.temp_zone, `${assetCount(l.id)} assets`].filter(Boolean).join(' · ')}</div>
                   </div>
                   <button className="btn btn-sm btn-quiet" onClick={() => setModal({ kind: 'location', parent_id: l.id })}><Icon.Plus />Inside</button>
+                  <a className="icon-btn" href={href(`/labels?place=${l.id}`)} aria-label={`QR label for ${l.name}`} title="QR label"><Icon.Tag /></a>
                   <button className="icon-btn" aria-label={`Edit ${l.name}`} onClick={() => setModal({ kind: 'location', row: l })}><Icon.Edit /></button>
                 </li>
               ))}
@@ -434,16 +435,19 @@ function General() {
   const [run, busy] = useAction();
   const [f, setF] = useState({
     org_name: settings.org_name || '', labor_rate: settings.labor_rate ?? 0, timezone: settings.timezone || 'Asia/Manila',
-    allow_signup: settings.allow_signup !== false
+    allow_signup: settings.allow_signup !== false, label_base_url: settings.label_base_url || ''
   });
   return (
     <div className="stack" style={{ maxWidth: 760 }}>
       <div className="card card-pad">
-        <form onSubmit={e => { e.preventDefault(); run(async () => { await db.update('app_settings', 1, { org_name: f.org_name.trim(), labor_rate: f.labor_rate || 0, allow_signup: f.allow_signup }); await refreshTables('app_settings'); }, 'Settings saved.'); }}>
+        <form onSubmit={e => { e.preventDefault(); run(async () => { const saved = await db.update('app_settings', 1, { org_name: f.org_name.trim(), labor_rate: f.labor_rate || 0, allow_signup: f.allow_signup, label_base_url: f.label_base_url }); setF(x => ({ ...x, label_base_url: saved.label_base_url || '' })); await refreshTables('app_settings'); }, 'Settings saved.'); }}>
           <div className="form-grid">
             <Field label="Organisation name" hint="Printed on job cards." span><input className="input" value={f.org_name} onChange={e => setF({ ...f, org_name: e.target.value })} /></Field>
             <Field label="Standard labour rate (₱ per hour)" hint="Used to cost logged hours. Applies to new entries."><input className="input" type="number" min="0" step="0.01" value={f.labor_rate} onChange={e => setF({ ...f, labor_rate: e.target.value })} /></Field>
             <Field label="Time zone" hint="Used for due dates, work order numbers and PM generation."><input className="input" value={f.timezone} readOnly /></Field>
+            <Field label="Address on QR labels" span hint="The address phones use to reach this server, e.g. http://192.168.1.20:8080. Ask IT to reserve a fixed IP address for the server PC first; labels stop working if it changes.">
+              <input className="input mono" value={f.label_base_url} onChange={e => setF({ ...f, label_base_url: e.target.value })} placeholder="http://192.168.1.20:8080" />
+            </Field>
             <label className="check span-2">
               <input type="checkbox" checked={f.allow_signup} onChange={e => setF({ ...f, allow_signup: e.target.checked })} />
               <span>Let people create their own account on the sign-in page. They start as Requesters.</span>

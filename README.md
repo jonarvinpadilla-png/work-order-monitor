@@ -20,7 +20,8 @@ There is no cloud service to sign up for: no Vercel, no Supabase, and no interne
 | **Parts & stock** | Spares with bin, min/max and cost. Every receive, issue, return and adjustment is kept in a stock ledger |
 | **Vendors & contracts** | Service providers and contract periods, with renewal warnings |
 | **Compliance** | Register of permits, certificates, tests and reports (BFP FSIC, DENR permits, electrical inspection, water tests, fire drills, FSSC 22000 audit…) with renewal history |
-| **Settings** | Users and roles, sites and locations (including cold-chain temperature zones), asset categories, pre-use checklist editor, labour rate |
+| **QR labels** | Printable stickers for assets and places. Scanning one with a phone opens that unit to report a problem, run the pre-use check or start a work order |
+| **Settings** | Users and roles, sites and locations (including cold-chain temperature zones), asset categories, pre-use checklist editor, labour rate, QR label address, backups |
 
 ### Who can do what
 
@@ -93,6 +94,26 @@ Windows, see `README.txt` in the package.
 The black window, and **Settings → General**, list addresses such as `http://192.168.1.20:8080`.
 Open one on any phone or PC on the same network and bookmark it (on phones, *Add to Home screen*).
 Ask IT to reserve a fixed IP address for the server PC so the address never changes.
+
+### Step 5: Put QR labels on equipment and rooms
+
+Scanning a label with a phone's camera opens that unit in the CMMS. People can then report a problem
+(already filled in with the unit and its location) or run the MHE pre-use check. Technicians and
+admins can also start a work order or open the asset record. A locked-out unit shows its lockout
+warning instead of the pre-use check. Labels for rooms and areas (canteen, docks, comfort rooms)
+open a page for reporting a problem there, listing the equipment in that place.
+
+1. In **Settings → General**, set **Address on QR labels** to the fixed address phones use, for
+   example `http://192.168.1.20:8080`. Every label contains it, so labels stop working if it changes.
+2. Open **Assets → QR labels** (or **QR label** on an asset, **QR labels** on the MHE board, or the
+   tag icon next to a location in **Settings → Sites & locations**).
+3. Tick the assets and places, choose **Small** (21 per A4 sheet, 63.5 × 38.1 mm) or **Large**
+   (8 per sheet, 99.1 × 67.7 mm), and print at 100% (*Actual size*). The sheets match common A4
+   label sheets such as Avery L7160 and L7165. Plain paper cut along the guides works too.
+
+Scanning works with the phone's normal camera; nothing needs installing. People sign in once per
+phone, and after that a scan goes straight to the unit. Links look like `…/#/u/RT-04` (by asset tag,
+so reprint a label after changing a tag) and `…/#/p/<place id>`.
 
 ### Your data and backups
 

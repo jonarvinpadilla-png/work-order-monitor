@@ -69,6 +69,12 @@ const qtyText = n => String(roundTo(Number(n) || 0, 2));
 // transaction, so a failure anywhere undoes the whole operation.
 // ---------------------------------------------------------------------------
 const HOOKS = {
+  app_settings: {
+    beforeUpdate(s, ctx, old, row, keys) {
+      if (keys.has('label_base_url')) row.label_base_url = normalizeBaseUrl(row.label_base_url);
+    }
+  },
+
   profiles: {
     beforeUpdate(s, ctx, old, row) {
       if ((row.role !== old.role || row.active !== old.active) && !ctx.system && !isAdmin(ctx.user)) {
@@ -189,6 +195,23 @@ const HOOKS = {
     beforeInsert(s, ctx, row) { s.applyComplianceEvent(ctx, row); }
   }
 };
+
+// The address phones use to reach the server, as printed on QR labels:
+// "192.168.1.20:8080/" becomes "http://192.168.1.20:8080".
+export function normalizeBaseUrl(value) {
+  const text = String(value ?? '').trim().replace(/\/+$/, '');
+  if (!text) return null;
+  let url;
+  try {
+    url = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(text) ? text : `http://${text}`);
+  } catch {
+    url = null;
+  }
+  if (!url || !/^https?:$/.test(url.protocol) || url.pathname !== '/' || url.search || url.hash || url.username || url.password) {
+    throw new RuleError('Enter just the address and port that phones use, for example http://192.168.1.20:8080.');
+  }
+  return `${url.protocol}//${url.host}`;
+}
 
 function stampWork(ctx, old, row) {
   if (row.status === 'In Progress' && !row.started_at) row.started_at = ctx.now;

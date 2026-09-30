@@ -41,7 +41,8 @@ export default function MheHub() {
   return (
     <>
       <PageHead eyebrow="Equipment" title="Material handling equipment"
-                sub={isStaff ? 'Reach trucks, forklifts, pallet trucks and lifts: status, hour meters, pre-use checks and service due.' : 'Pick your unit and run the pre-use check before you drive it.'} />
+                sub={isStaff ? 'Reach trucks, forklifts, pallet trucks and lifts: status, hour meters, pre-use checks and service due.' : 'Pick your unit and run the pre-use check before you drive it.'}
+                actions={isStaff && <a className="btn" href={href('/labels?filter=mhe')}><Icon.Tag />QR labels</a>} />
 
       <div className="tiles">
         <Tile label="Units in service" icon={Icon.Forklift} value={`${units.filter(a => a.status === 'Operational').length}/${units.length}`} tone={locked.length ? 'warn' : 'good'} />
